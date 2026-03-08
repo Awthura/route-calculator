@@ -21,10 +21,3 @@ Google Maps–powered geospatial tools for any industry, any use case.
 - **Backend** — n8n Cloud webhook (geocoding + distance matrix)
 - **APIs** — Google Maps JavaScript API, Places API, Directions API, Distance Matrix API
 
-### Local dev
-
-No build step — open any `index.html` directly in a browser, or serve with:
-
-```bash
-npx serve .
-```
