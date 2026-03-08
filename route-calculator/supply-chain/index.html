@@ -230,15 +230,45 @@
       color: var(--text);
     }
     .stat-sub {
-      font-size: 11px;
+      font-size: 13px;
       color: var(--muted);
-      margin-top: 1px;
+      margin-top: 2px;
     }
     .stat-item.total .stat-value { color: var(--accent); }
     .stat-item.leg1  .stat-value { color: #f59e0b; }
     .stat-item.leg2  .stat-value { color: var(--accent2); }
 
     .stats-bar.hidden { display: none; }
+
+    .export-bar {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 10px 20px;
+      display: flex;
+      justify-content: flex-end;
+      flex-shrink: 0;
+    }
+    .export-bar.hidden { display: none; }
+
+    button#exportBtn {
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      letter-spacing: 0.04em;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s, color 0.15s;
+    }
+    button#exportBtn:hover {
+      background: var(--accent);
+      color: #fff;
+    }
 
     /* ── Autocomplete dropdown dark override ── */
     .pac-container {
@@ -382,13 +412,17 @@
   </div>
 </div>
 
+<div class="export-bar hidden" id="exportBar">
+  <button id="exportBtn" onclick="exportCSV()">⬇ Export CSV</button>
+</div>
+
 <script>
   // ── Config ──────────────────────────────────────────────────────────────
   const WEBHOOK_URL = '__WEBHOOK_URL__';
   const MAPS_API_KEY = '__MAPS_API_KEY__';
   // ────────────────────────────────────────────────────────────────────────
 
-  let map, directionsRenderer;
+  let map, directionsRenderer, lastResult;
 
   function initMap() {
     map = new google.maps.Map(document.getElementById('map'), {
@@ -490,8 +524,11 @@
     document.getElementById('totalKm').textContent = data.total_route_km + ' km';
     const totalMins = parseDurationToMins(data.supplier_to_manufacturer_duration)
                     + parseDurationToMins(data.manufacturer_to_customer_duration);
-    document.getElementById('totalDur').textContent = formatMins(totalMins);
+    const totalDurText = formatMins(totalMins);
+    document.getElementById('totalDur').textContent = totalDurText;
     document.getElementById('statsBar').classList.remove('hidden');
+    document.getElementById('exportBar').classList.remove('hidden');
+    lastResult = { data, supplierAddr, manufacturerAddr, customerAddr, totalDurText };
 
     const directionsService = new google.maps.DirectionsService();
     directionsService.route({
@@ -536,6 +573,29 @@
     const el = document.getElementById('errorMsg');
     el.textContent = msg;
     el.style.display = 'block';
+  }
+
+  function exportCSV() {
+    if (!lastResult) return;
+    const { data, supplierAddr, manufacturerAddr, customerAddr, totalDurText } = lastResult;
+    const rows = [
+      ['Field', 'Value'],
+      ['Supplier', supplierAddr],
+      ['Manufacturer / Plant', manufacturerAddr],
+      ['Customer', customerAddr],
+      ['Leg 1 Distance (km)', data.supplier_to_manufacturer_km],
+      ['Leg 1 Duration', data.supplier_to_manufacturer_duration],
+      ['Leg 2 Distance (km)', data.manufacturer_to_customer_km],
+      ['Leg 2 Duration', data.manufacturer_to_customer_duration],
+      ['Total Distance (km)', data.total_route_km],
+      ['Total Duration', totalDurText],
+    ];
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'route-result.csv';
+    a.click();
   }
 
   document.addEventListener('keydown', e => {
