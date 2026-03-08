@@ -131,6 +131,47 @@
       line-height: 1.5; text-align: center; opacity: 0.7;
     }
 
+    #consentBanner {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: #1a1d27;
+      border-top: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      z-index: 1000;
+      flex-wrap: wrap;
+    }
+    #consentBanner p {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+      flex: 1;
+      min-width: 200px;
+    }
+    #consentBanner p strong { color: var(--text); }
+    .consent-btns { display: flex; gap: 8px; flex-shrink: 0; }
+    .consent-btns button {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 7px 16px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      background: transparent;
+      color: var(--muted);
+      transition: background 0.15s, color 0.15s;
+    }
+    .consent-btns .accept {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .consent-btns .accept:hover { background: #3a7de8; }
+    .consent-btns button:not(.accept):hover { color: var(--text); border-color: var(--muted); }
+
     #errorMsg {
       font-size: 12px; color: var(--danger);
       background: rgba(248,113,113,0.1);
@@ -330,8 +371,8 @@
     <div id="errorMsg"></div>
 
     <p class="privacy-note">
-      🔒 Your privacy is respected.<br>
-      Addresses are processed in real time and never stored or shared.
+      🔒 No personal data is ever collected.<br>
+      With your consent, only anonymised coordinates are cached to speed up future lookups.
     </p>
   </aside>
 
@@ -457,6 +498,7 @@
           supplier_address:     home,
           manufacturer_address: work,
           customer_address:     home,
+          cache_consent:        localStorage.getItem('cacheConsent') === 'true',
         }),
       });
 
@@ -610,6 +652,26 @@
 <script
   src="https://maps.googleapis.com/maps/api/js?key=__MAPS_API_KEY__&libraries=places&callback=initMap"
   async defer>
+</script>
+
+<div id="consentBanner" style="display:none">
+  <p><strong>Speed up lookups?</strong> With your consent, we cache anonymised coordinates (not addresses, not personal data) to avoid repeat API calls. You can opt out any time.</p>
+  <div class="consent-btns">
+    <button onclick="setConsent(false)">No thanks</button>
+    <button class="accept" onclick="setConsent(true)">Yes, that's fine</button>
+  </div>
+</div>
+
+<script>
+  (function() {
+    if (localStorage.getItem('cacheConsent') === null) {
+      document.getElementById('consentBanner').style.display = 'flex';
+    }
+  })();
+  function setConsent(value) {
+    localStorage.setItem('cacheConsent', value ? 'true' : 'false');
+    document.getElementById('consentBanner').style.display = 'none';
+  }
 </script>
 
 </body>
