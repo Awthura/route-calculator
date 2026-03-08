@@ -87,6 +87,15 @@
     .field-group select option { background: var(--surface); }
     .field-group select:disabled { opacity: 0.4; cursor: not-allowed; }
 
+    .or-divider {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--muted);
+    }
+    .or-divider::before, .or-divider::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+
     .stadium-preview {
       font-size: 11px; color: var(--accent2);
       margin-top: 4px; min-height: 14px;
@@ -270,6 +279,21 @@
       <input id="homeInput" type="text" placeholder="e.g. Manchester, UK" autocomplete="off" />
     </div>
 
+    <div class="or-divider">or start from your club</div>
+
+    <div class="field-group">
+      <select id="homeTeamSelect" onchange="fillHomeFromTeam()">
+        <option value="">— Pick your team's stadium —</option>
+        <optgroup label="Premier League"></optgroup>
+        <optgroup label="Championship"></optgroup>
+        <optgroup label="Bundesliga"></optgroup>
+        <optgroup label="2. Bundesliga"></optgroup>
+        <optgroup label="Serie A"></optgroup>
+        <optgroup label="La Liga"></optgroup>
+        <optgroup label="Ligue 1"></optgroup>
+      </select>
+    </div>
+
     <div class="divider"></div>
 
     <div class="field-group">
@@ -396,10 +420,31 @@
   let teams = [];
   let map, directionsRenderer, lastResult;
 
-  // Load teams data
+  // Load teams data and populate home-team dropdown
   fetch('../../teams.json')
     .then(r => r.json())
-    .then(data => { teams = data; });
+    .then(data => {
+      teams = data;
+      const sel = document.getElementById('homeTeamSelect');
+      const leagueOrder = ['Premier League','Championship','Bundesliga','2. Bundesliga','Serie A','La Liga','Ligue 1'];
+      leagueOrder.forEach(league => {
+        const group = sel.querySelector(`optgroup[label="${league}"]`);
+        if (!group) return;
+        data.filter(t => t.league === league)
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .forEach(t => {
+              const opt = document.createElement('option');
+              opt.value = t.address;
+              opt.textContent = t.name;
+              group.appendChild(opt);
+            });
+      });
+    });
+
+  function fillHomeFromTeam() {
+    const address = document.getElementById('homeTeamSelect').value;
+    if (address) document.getElementById('homeInput').value = address;
+  }
 
   function initMap() {
     map = new google.maps.Map(document.getElementById('map'), {
