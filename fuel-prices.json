@@ -32,8 +32,8 @@
       "unit": "litre"
     },
     "BG": {
-      "petrol": 1.5409,
-      "diesel": 1.6814,
+      "petrol": 2.50,
+      "diesel": 2.45,
       "electric_kwh": 0.22,
       "currency": "BGN",
       "symbol": "лв",
@@ -48,8 +48,8 @@
       "unit": "litre"
     },
     "CZ": {
-      "petrol": 1.2292,
-      "diesel": 1.2452,
+      "petrol": 38.0,
+      "diesel": 36.5,
       "electric_kwh": 6.5,
       "currency": "CZK",
       "symbol": "Kč",
@@ -64,8 +64,8 @@
       "unit": "litre"
     },
     "DK": {
-      "petrol": 1.479,
-      "diesel": 1.514,
+      "petrol": 15.2,
+      "diesel": 14.8,
       "electric_kwh": 2.8,
       "currency": "DKK",
       "symbol": "kr",
@@ -120,8 +120,8 @@
       "unit": "litre"
     },
     "HU": {
-      "petrol": 1.4709,
-      "diesel": 1.6405,
+      "petrol": 570,
+      "diesel": 580,
       "electric_kwh": 100,
       "currency": "HUF",
       "symbol": "Ft",
@@ -184,8 +184,8 @@
       "unit": "litre"
     },
     "PL": {
-      "petrol": 1.3748,
-      "diesel": 1.4265,
+      "petrol": 6.50,
+      "diesel": 6.80,
       "electric_kwh": 0.85,
       "currency": "PLN",
       "symbol": "zł",
@@ -200,16 +200,16 @@
       "unit": "litre"
     },
     "RO": {
-      "petrol": 1.5684,
-      "diesel": 1.6331,
+      "petrol": 7.20,
+      "diesel": 7.40,
       "electric_kwh": 1.1,
       "currency": "RON",
       "symbol": "lei",
       "unit": "litre"
     },
     "SE": {
-      "petrol": 1.4366,
-      "diesel": 1.5786,
+      "petrol": 17.5,
+      "diesel": 19.5,
       "electric_kwh": 1.6,
       "currency": "SEK",
       "symbol": "kr",

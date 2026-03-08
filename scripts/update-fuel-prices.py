@@ -27,15 +27,20 @@ EU_BULLETIN_URL = (
     "264c2d0f-f161-4ea3-a777-78faae59bea0_en"
 )
 
-# Rows 3–29 in the XLSX map to EU countries in this order (alphabetical)
-EU_ROW_TO_CODE = {
-    3:  "BE", 4:  "BG", 5:  "CZ", 6:  "DK", 7:  "DE",
-    8:  "EE", 9:  "IE", 10: "GR", 11: "ES", 12: "FR",
-    13: "HR", 14: "IT", 15: "CY", 16: "LV", 17: "LT",
-    18: "LU", 19: "HU", 20: "MT", 21: "NL", 22: "AT",
-    23: "PL", 24: "PT", 25: "RO", 26: "SI", 27: "SK",
-    28: "FI", 29: "SE",
+# Country name → ISO code (as written in the EU Oil Bulletin XLSX, column A)
+EU_NAME_TO_CODE = {
+    "Austria": "AT", "Belgium": "BE", "Bulgaria": "BG", "Croatia": "HR",
+    "Cyprus": "CY", "Czech Republic": "CZ", "Czechia": "CZ", "Denmark": "DK",
+    "Estonia": "EE", "Finland": "FI", "France": "FR", "Germany": "DE",
+    "Greece": "GR", "Hungary": "HU", "Ireland": "IE", "Italy": "IT",
+    "Latvia": "LV", "Lithuania": "LT", "Luxembourg": "LU", "Malta": "MT",
+    "Netherlands": "NL", "Poland": "PL", "Portugal": "PT", "Romania": "RO",
+    "Slovakia": "SK", "Slovenia": "SI", "Spain": "ES", "Sweden": "SE",
 }
+
+# Countries whose JSON prices are in local currency (not EUR).
+# The Oil Bulletin reports in EUR — skip these so we don't corrupt local values.
+NON_EUR_COUNTRIES = {"BG", "CZ", "DK", "HU", "PL", "RO", "SE"}
 
 
 def load_prices():
@@ -85,18 +90,21 @@ def fetch_eu_prices():
         ws = wb.active
 
         results = {}
-        for row_idx, code in EU_ROW_TO_CODE.items():
+        for row in ws.iter_rows(min_row=3, values_only=True):
+            country_name = str(row[0]).strip() if row[0] else ""
+            code = EU_NAME_TO_CODE.get(country_name)
+            if not code:
+                continue  # skip aggregates (EU27 average, Euro Area, etc.)
+            if code in NON_EUR_COUNTRIES:
+                print(f"  {code}: skipped (local currency — not EUR)")
+                continue
             try:
-                petrol_raw = ws.cell(row=row_idx, column=2).value  # Col B: Euro-super 95
-                diesel_raw = ws.cell(row=row_idx, column=3).value  # Col C: Automotive gas oil
-                if petrol_raw is None or diesel_raw is None:
-                    continue
-                petrol = round(float(petrol_raw) / 1000, 4)  # EUR/1000L → EUR/L
-                diesel = round(float(diesel_raw) / 1000, 4)
+                petrol = round(float(row[1]) / 1000, 4)  # Col B: EUR/1000L → EUR/L
+                diesel = round(float(row[2]) / 1000, 4)  # Col C: EUR/1000L → EUR/L
                 results[code] = {"petrol": petrol, "diesel": diesel}
                 print(f"  {code}: petrol={petrol:.4f} diesel={diesel:.4f} EUR/L")
             except Exception as e:
-                print(f"  ✗ {code} row {row_idx}: {e}")
+                print(f"  ✗ {code} ({country_name}): {e}")
 
         return results
 
