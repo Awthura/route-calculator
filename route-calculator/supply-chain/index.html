@@ -361,7 +361,7 @@
   <div class="stat-item total">
     <div class="stat-label">Total Route</div>
     <div class="stat-value" id="totalKm">—</div>
-    <div class="stat-sub">driving distance</div>
+    <div class="stat-sub" id="totalDur">driving distance</div>
   </div>
 </div>
 
@@ -452,12 +452,28 @@
     }
   }
 
+  function parseDurationToMins(str) {
+    const h = (str.match(/(\d+)\s*hour/) || [0, 0])[1];
+    const m = (str.match(/(\d+)\s*min/)  || [0, 0])[1];
+    return parseInt(h) * 60 + parseInt(m);
+  }
+
+  function formatMins(total) {
+    const h = Math.floor(total / 60);
+    const m = total % 60;
+    if (h === 0) return `${m} mins`;
+    return `${h} hr${h > 1 ? 's' : ''} ${m} mins`;
+  }
+
   function displayResults(data, supplierAddr, manufacturerAddr, customerAddr) {
     document.getElementById('leg1km').textContent  = data.supplier_to_manufacturer_km + ' km';
     document.getElementById('leg1dur').textContent = data.supplier_to_manufacturer_duration;
     document.getElementById('leg2km').textContent  = data.manufacturer_to_customer_km + ' km';
     document.getElementById('leg2dur').textContent = data.manufacturer_to_customer_duration;
     document.getElementById('totalKm').textContent = data.total_route_km + ' km';
+    const totalMins = parseDurationToMins(data.supplier_to_manufacturer_duration)
+                    + parseDurationToMins(data.manufacturer_to_customer_duration);
+    document.getElementById('totalDur').textContent = formatMins(totalMins);
     document.getElementById('statsBar').classList.remove('hidden');
 
     const directionsService = new google.maps.DirectionsService();
