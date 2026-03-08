@@ -132,6 +132,25 @@
       background: var(--border);
     }
 
+    .field-group select {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 13px;
+      padding: 9px 10px;
+      outline: none;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      transition: border-color 0.15s;
+    }
+    .field-group select:focus { border-color: var(--accent); }
+    .field-group select option { background: var(--surface); }
+
     button#calcBtn {
       width: 100%;
       background: var(--accent);
@@ -240,6 +259,49 @@
 
     .stats-bar.hidden { display: none; }
 
+    /* ── Fuel & CO₂ bar ── */
+    .fuel-bar {
+      background: var(--bg);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .fuel-bar.hidden { display: none; }
+
+    .fuel-item {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-right: 1px solid var(--border);
+      padding: 10px 16px;
+    }
+    .fuel-item:last-child { border-right: none; }
+
+    .fuel-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      margin-bottom: 3px;
+    }
+    .fuel-value {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .fuel-co2 {
+      font-size: 11px;
+      color: var(--accent2);
+      margin-top: 1px;
+    }
+    .fuel-item.leg1f .fuel-value { color: #f59e0b; }
+    .fuel-item.leg2f .fuel-value { color: var(--accent2); }
+    .fuel-item.totalf .fuel-value { color: var(--accent); }
+
     .export-bar {
       background: var(--surface);
       border-top: 1px solid var(--border);
@@ -341,6 +403,17 @@
       }
 
       .stat-value { font-size: 20px; }
+
+      .fuel-item {
+        flex: 1 1 45%;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        padding: 10px 16px;
+      }
+      .fuel-item:last-child {
+        flex: 1 1 100%;
+        border-bottom: none;
+      }
     }
   </style>
 </head>
@@ -378,6 +451,29 @@
 
     <div class="divider"></div>
 
+    <div class="field-group">
+      <label>Vehicle Type</label>
+      <select id="vehicleSelect" onchange="recalcFuel()">
+        <option value="">— Select vehicle —</option>
+        <optgroup label="Petrol">
+          <option value="small_petrol">Small Car (6 L/100km)</option>
+          <option value="medium_petrol">Medium Car (8 L/100km)</option>
+          <option value="suv_petrol">SUV (11 L/100km)</option>
+        </optgroup>
+        <optgroup label="Diesel">
+          <option value="small_diesel">Small Car (5 L/100km)</option>
+          <option value="medium_diesel" selected>Medium Car (6.5 L/100km)</option>
+          <option value="small_van_diesel">Small Van (9 L/100km)</option>
+          <option value="large_van_diesel">Large Van (13 L/100km)</option>
+          <option value="truck_diesel">Truck / HGV (35 L/100km)</option>
+        </optgroup>
+        <optgroup label="Electric">
+          <option value="electric_car">Electric Car (18 kWh/100km)</option>
+          <option value="electric_van">Electric Van (28 kWh/100km)</option>
+        </optgroup>
+      </select>
+    </div>
+
     <button id="calcBtn" onclick="calculate()">
       <div class="spinner"></div>
       <span class="btn-text">Calculate Route</span>
@@ -412,6 +508,24 @@
   </div>
 </div>
 
+<div class="fuel-bar hidden" id="fuelBar">
+  <div class="fuel-item leg1f">
+    <div class="fuel-label">Leg 1 — Fuel</div>
+    <div class="fuel-value" id="leg1fuel">—</div>
+    <div class="fuel-co2" id="leg1co2">—</div>
+  </div>
+  <div class="fuel-item leg2f">
+    <div class="fuel-label">Leg 2 — Fuel</div>
+    <div class="fuel-value" id="leg2fuel">—</div>
+    <div class="fuel-co2" id="leg2co2">—</div>
+  </div>
+  <div class="fuel-item totalf">
+    <div class="fuel-label">Total Fuel & CO₂</div>
+    <div class="fuel-value" id="totalfuel">—</div>
+    <div class="fuel-co2" id="totalco2">—</div>
+  </div>
+</div>
+
 <div class="export-bar hidden" id="exportBar">
   <button id="exportBtn" onclick="exportCSV()">⬇ Export CSV</button>
 </div>
@@ -421,6 +535,20 @@
   const WEBHOOK_URL = '__WEBHOOK_URL__';
   const MAPS_API_KEY = '__MAPS_API_KEY__';
   // ────────────────────────────────────────────────────────────────────────
+
+  const VEHICLES = {
+    small_petrol:     { fuel: 'petrol',   rate: 6.0  },
+    medium_petrol:    { fuel: 'petrol',   rate: 8.0  },
+    suv_petrol:       { fuel: 'petrol',   rate: 11.0 },
+    small_diesel:     { fuel: 'diesel',   rate: 5.0  },
+    medium_diesel:    { fuel: 'diesel',   rate: 6.5  },
+    small_van_diesel: { fuel: 'diesel',   rate: 9.0  },
+    large_van_diesel: { fuel: 'diesel',   rate: 13.0 },
+    truck_diesel:     { fuel: 'diesel',   rate: 35.0 },
+    electric_car:     { fuel: 'electric', rate: 18.0 },
+    electric_van:     { fuel: 'electric', rate: 28.0 },
+  };
+  const CO2_FACTOR = { petrol: 2.31, diesel: 2.68, electric: 0.22 };
 
   let map, directionsRenderer, lastResult;
 
@@ -529,6 +657,7 @@
     document.getElementById('statsBar').classList.remove('hidden');
     document.getElementById('exportBar').classList.remove('hidden');
     lastResult = { data, supplierAddr, manufacturerAddr, customerAddr, totalDurText };
+    recalcFuel();
 
     const directionsService = new google.maps.DirectionsService();
     directionsService.route({
@@ -569,6 +698,40 @@
     });
   }
 
+  function recalcFuel() {
+    if (!lastResult) return;
+    const vehicleKey = document.getElementById('vehicleSelect').value;
+    if (!vehicleKey) { document.getElementById('fuelBar').classList.add('hidden'); return; }
+
+    const vehicle = VEHICLES[vehicleKey];
+    const isElectric = vehicle.fuel === 'electric';
+    const unit = isElectric ? 'kWh' : 'L';
+    const factor = CO2_FACTOR[vehicle.fuel];
+
+    function calc(km) {
+      const consumed = parseFloat((km * vehicle.rate / 100).toFixed(1));
+      const co2 = parseFloat((consumed * factor).toFixed(1));
+      return { consumed, co2 };
+    }
+
+    const leg1 = calc(lastResult.data.supplier_to_manufacturer_km);
+    const leg2 = calc(lastResult.data.manufacturer_to_customer_km);
+    const total = {
+      consumed: parseFloat((leg1.consumed + leg2.consumed).toFixed(1)),
+      co2:      parseFloat((leg1.co2 + leg2.co2).toFixed(1)),
+    };
+
+    document.getElementById('leg1fuel').textContent  = `${leg1.consumed} ${unit}`;
+    document.getElementById('leg1co2').textContent   = `${leg1.co2} kg CO₂`;
+    document.getElementById('leg2fuel').textContent  = `${leg2.consumed} ${unit}`;
+    document.getElementById('leg2co2').textContent   = `${leg2.co2} kg CO₂`;
+    document.getElementById('totalfuel').textContent = `${total.consumed} ${unit}`;
+    document.getElementById('totalco2').textContent  = `${total.co2} kg CO₂`;
+    document.getElementById('fuelBar').classList.remove('hidden');
+
+    lastResult.fuelData = { unit, leg1, leg2, total, vehicleKey };
+  }
+
   function showError(msg) {
     const el = document.getElementById('errorMsg');
     el.textContent = msg;
@@ -590,6 +753,18 @@
       ['Total Distance (km)', data.total_route_km],
       ['Total Duration', totalDurText],
     ];
+    if (lastResult.fuelData) {
+      const { unit, leg1, leg2, total, vehicleKey } = lastResult.fuelData;
+      rows.push(
+        ['Vehicle Type', vehicleKey.replace(/_/g, ' ')],
+        [`Leg 1 Fuel (${unit})`, leg1.consumed],
+        ['Leg 1 CO₂ (kg)', leg1.co2],
+        [`Leg 2 Fuel (${unit})`, leg2.consumed],
+        ['Leg 2 CO₂ (kg)', leg2.co2],
+        [`Total Fuel (${unit})`, total.consumed],
+        ['Total CO₂ (kg)', total.co2],
+      );
+    }
     const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a');
