@@ -15,6 +15,7 @@ Google Maps–powered geospatial tools for any industry, any use case.
 |---|---|
 | [Supply Chain Calculator](https://awthura.github.io/path2anywhere/route-calculator/supply-chain/) | 3-stop route (Supplier → Plant → Customer) with distance, duration, fuel consumption, and CO₂ footprint |
 | [Commute Calculator](https://awthura.github.io/path2anywhere/route-calculator/commute/) | Round-trip commute (Home ↔ Work) with daily, weekly, and monthly fuel and CO₂ estimates |
+| [Away Days Calculator](https://awthura.github.io/path2anywhere/route-calculator/away-days/) | Football away trips — pick from 138 clubs across 7 European leagues, get distance, fuel and CO₂ for the round trip |
 
 ### Stack
 
