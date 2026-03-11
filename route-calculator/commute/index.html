@@ -224,6 +224,41 @@
       .wfh-item:last-child { flex: 1 1 100%; border-bottom: none; }
     }
 
+    /* ── EV Feasibility bar ── */
+    .ev-bar {
+      background: var(--bg); border-top: 1px solid var(--border);
+      display: flex; align-items: center; flex-shrink: 0;
+    }
+    .ev-bar.hidden { display: none; }
+
+    .ev-item {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      border-right: 1px solid var(--border); padding: 10px 16px;
+    }
+    .ev-item:last-child { border-right: none; }
+
+    .ev-label {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--muted); margin-bottom: 3px;
+    }
+    .ev-value { font-size: 14px; font-weight: 700; color: #06b6d4; }
+    .ev-sub   { font-size: 11px; color: var(--muted); margin-top: 1px; }
+    .ev-note  {
+      font-size: 10px; color: var(--muted); text-align: center;
+      padding: 4px 20px; border-top: 1px solid var(--border);
+      width: 100%; flex-shrink: 0;
+    }
+
+    @media (max-width: 768px) {
+      .ev-bar { flex-wrap: wrap; padding: 4px 0; }
+      .ev-item {
+        flex: 1 1 45%; border-right: none;
+        border-bottom: 1px solid var(--border); padding: 10px 16px;
+      }
+      .ev-item:last-child { flex: 1 1 100%; border-bottom: none; }
+    }
+
     /* ── Fuel cost estimation ── */
     #estimateCostBtn {
       display: none; background: transparent; color: var(--accent2);
@@ -384,6 +419,34 @@
       </div>
     </div>
 
+    <div class="field-group">
+      <label>⚡ Compare with EV</label>
+      <select id="evSelect" onchange="recalcEV()">
+        <option value="">— No EV comparison —</option>
+        <optgroup label="Tesla">
+          <option value="tesla_m3_lr">Tesla Model 3 LR (580 km)</option>
+          <option value="tesla_my_lr">Tesla Model Y LR (533 km)</option>
+        </optgroup>
+        <optgroup label="Volkswagen">
+          <option value="vw_id4">VW ID.4 Pro (520 km)</option>
+          <option value="vw_id3">VW ID.3 Pro S (420 km)</option>
+        </optgroup>
+        <optgroup label="BMW">
+          <option value="bmw_i4">BMW i4 eDrive40 (590 km)</option>
+          <option value="bmw_ix">BMW iX xDrive50 (630 km)</option>
+        </optgroup>
+        <optgroup label="Hyundai / Kia">
+          <option value="hyundai_ioniq6">Hyundai IONIQ 6 LR (614 km)</option>
+          <option value="hyundai_ioniq5">Hyundai IONIQ 5 LR (507 km)</option>
+        </optgroup>
+        <optgroup label="Other">
+          <option value="renault_zoe">Renault Zoe R135 (395 km)</option>
+          <option value="nissan_leaf">Nissan Leaf 40 kWh (270 km)</option>
+          <option value="peugeot_e208">Peugeot e-208 (362 km)</option>
+        </optgroup>
+      </select>
+    </div>
+
     <div class="divider"></div>
 
     <button id="calcBtn" onclick="calculate()">
@@ -476,6 +539,30 @@
   </div>
 </div>
 
+<div class="ev-bar hidden" id="evBar">
+  <div class="ev-item">
+    <div class="ev-label">Single Charge?</div>
+    <div class="ev-value" id="evFeasible">—</div>
+    <div class="ev-sub"   id="evFeasibleSub">—</div>
+  </div>
+  <div class="ev-item">
+    <div class="ev-label">Daily Energy</div>
+    <div class="ev-value" id="evEnergy">—</div>
+    <div class="ev-sub"   id="evEnergySub">—</div>
+  </div>
+  <div class="ev-item">
+    <div class="ev-label">Annual EV Cost</div>
+    <div class="ev-value" id="evAnnualCost">—</div>
+    <div class="ev-sub"   id="evAnnualCostSub">—</div>
+  </div>
+  <div class="ev-item">
+    <div class="ev-label">Annual Savings vs ICE</div>
+    <div class="ev-value" id="evSavings">—</div>
+    <div class="ev-sub"   id="evSavingsSub">—</div>
+  </div>
+  <div class="ev-note">⚡ Assumes home charging overnight · 85% usable range · WLTP rated figures</div>
+</div>
+
 <div class="export-bar hidden" id="exportBar">
   <button id="exportBtn" onclick="exportCSV()">⬇ Export CSV</button>
 </div>
@@ -483,6 +570,20 @@
 <script>
   const WEBHOOK_URL  = '__WEBHOOK_URL__';
   const MAPS_API_KEY = '__MAPS_API_KEY__';
+
+  const EV_MODELS = {
+    tesla_m3_lr:    { name: 'Tesla Model 3 LR',    range: 580, consumption: 14.0 },
+    tesla_my_lr:    { name: 'Tesla Model Y LR',    range: 533, consumption: 16.0 },
+    vw_id4:         { name: 'VW ID.4 Pro',         range: 520, consumption: 16.5 },
+    vw_id3:         { name: 'VW ID.3 Pro S',       range: 420, consumption: 15.0 },
+    bmw_i4:         { name: 'BMW i4 eDrive40',     range: 590, consumption: 16.0 },
+    bmw_ix:         { name: 'BMW iX xDrive50',     range: 630, consumption: 19.0 },
+    hyundai_ioniq6: { name: 'Hyundai IONIQ 6 LR',  range: 614, consumption: 14.0 },
+    hyundai_ioniq5: { name: 'Hyundai IONIQ 5 LR',  range: 507, consumption: 16.0 },
+    renault_zoe:    { name: 'Renault Zoe R135',    range: 395, consumption: 17.0 },
+    nissan_leaf:    { name: 'Nissan Leaf 40 kWh',  range: 270, consumption: 16.0 },
+    peugeot_e208:   { name: 'Peugeot e-208',       range: 362, consumption: 14.5 },
+  };
 
   const VEHICLES = {
     small_petrol:     { fuel: 'petrol',   rate: 6.0  },
@@ -544,6 +645,7 @@
 
     validateFuelPrice();
     recalcFuel();
+    recalcEV();
   }
 
   async function startCostEstimation() {
@@ -776,6 +878,7 @@
     document.getElementById('fuelBar').classList.remove('hidden');
     lastResult.fuelData = { unit, dailyFuel, dailyCo2, weeklyFuel, weeklyCo2, monthlyFuel, monthlyCo2, days, vehicleKey };
     recalcWFH();
+    recalcEV();
   }
 
   function recalcWFH() {
@@ -836,6 +939,80 @@
     }
 
     wfhBar.classList.remove('hidden');
+  }
+
+  function recalcEV() {
+    if (!lastResult) return;
+    const evKey = document.getElementById('evSelect').value;
+    const evBar = document.getElementById('evBar');
+    if (!evKey) { evBar.classList.add('hidden'); return; }
+
+    const ev = EV_MODELS[evKey];
+    const usableRange = ev.range * 0.85;
+    const days = parseFloat(document.getElementById('daysInput').value) || 5;
+    const annualDays = days * 52;
+
+    // 1. Single charge feasibility
+    const feasible   = lastResult.totKm <= usableRange;
+    const rangeLeft  = Math.round(usableRange - lastResult.totKm);
+    const feasibleEl = document.getElementById('evFeasible');
+    feasibleEl.textContent = feasible ? '✓ Yes' : '✗ No';
+    feasibleEl.style.color = feasible ? '#06b6d4' : 'var(--danger)';
+    document.getElementById('evFeasibleSub').textContent = feasible
+      ? `${rangeLeft} km to spare`
+      : `${Math.abs(rangeLeft)} km over usable range`;
+
+    // 2. Daily energy
+    const dailyKwh = parseFloat((lastResult.totKm * ev.consumption / 100).toFixed(1));
+    document.getElementById('evEnergy').textContent    = `${dailyKwh} kWh`;
+    document.getElementById('evEnergySub').textContent = `${ev.range} km WLTP range`;
+
+    // 3. Annual EV cost + 4. Annual savings
+    const entry     = fuelPrices && detectedCountryCode && fuelPrices.countries[detectedCountryCode];
+    const elecPrice = entry ? entry.electric_kwh : null;
+    const sym       = entry ? entry.symbol : '';
+
+    if (elecPrice !== null) {
+      const annualKwh    = dailyKwh * annualDays;
+      const annualEvCost = annualKwh * elecPrice;
+      document.getElementById('evAnnualCost').textContent    = sym + Math.round(annualEvCost).toLocaleString();
+      document.getElementById('evAnnualCostSub').textContent = `${sym}${elecPrice.toFixed(3)}/kWh`;
+
+      const savingsEl  = document.getElementById('evSavings');
+      const savingsSub = document.getElementById('evSavingsSub');
+      if (costEnabled && lastResult.fuelData) {
+        const priceInput    = parseFloat(document.getElementById('fuelPriceInput').value);
+        const isCurrentElec = lastResult.fuelData.vehicleKey.includes('electric');
+        const displayMult   = (!isCurrentElec && entry && entry.display_multiplier) || 1;
+        if (!isNaN(priceInput) && priceInput > 0) {
+          const annualFuelCost = lastResult.fuelData.dailyFuel * (priceInput / displayMult) * annualDays;
+          const savings = annualFuelCost - annualEvCost;
+          savingsEl.textContent  = savings >= 0
+            ? sym + Math.round(savings).toLocaleString()
+            : `−${sym}${Math.round(Math.abs(savings)).toLocaleString()}`;
+          savingsEl.style.color  = savings >= 0 ? 'var(--accent2)' : 'var(--danger)';
+          savingsSub.textContent = savings >= 0
+            ? `vs ${lastResult.fuelData.vehicleKey.replace(/_/g, ' ')}`
+            : 'EV costs more to run';
+        } else {
+          savingsEl.textContent  = '—';
+          savingsEl.style.color  = '';
+          savingsSub.textContent = 'Add fuel price →';
+        }
+      } else {
+        savingsEl.textContent  = '—';
+        savingsEl.style.color  = '';
+        savingsSub.textContent = costEnabled ? '' : 'Add fuel price →';
+      }
+    } else {
+      document.getElementById('evAnnualCost').textContent    = '—';
+      document.getElementById('evAnnualCostSub').textContent = detectedCountryCode ? 'No electricity data' : 'Click ⛽ first';
+      document.getElementById('evSavings').textContent       = '—';
+      document.getElementById('evSavings').style.color       = '';
+      document.getElementById('evSavingsSub').textContent    = '';
+    }
+
+    evBar.classList.remove('hidden');
   }
 
   function showError(msg) {
