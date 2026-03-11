@@ -281,6 +281,46 @@
       padding: 3px 20px; border-top: 1px solid var(--border);
     }
 
+    /* ── Optimise button ── */
+    #optimiseBtn {
+      display: none; background: transparent; color: #a78bfa;
+      border: 1px solid #a78bfa; border-radius: 8px;
+      padding: 9px 16px; font-size: 12px; font-weight: 600;
+      cursor: pointer; letter-spacing: 0.04em; width: 100%;
+      transition: background 0.15s, color 0.15s;
+    }
+    #optimiseBtn:hover:not(:disabled):not(.done) { background: rgba(167,139,250,0.15); }
+    #optimiseBtn:disabled { opacity: 0.6; cursor: default; }
+    #optimiseBtn.done { color: var(--accent2); border-color: var(--accent2); cursor: default; pointer-events: none; }
+
+    /* ── Savings bar ── */
+    .savings-bar {
+      background: rgba(167,139,250,0.07);
+      border-top: 1px solid rgba(167,139,250,0.2);
+      display: flex; align-items: center; gap: 16px;
+      padding: 8px 16px; flex-shrink: 0;
+    }
+    .savings-bar.hidden { display: none; }
+    .savings-badge {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+      text-transform: uppercase; color: #a78bfa;
+      background: rgba(167,139,250,0.15);
+      border: 1px solid rgba(167,139,250,0.3);
+      border-radius: 4px; padding: 3px 8px; white-space: nowrap; flex-shrink: 0;
+    }
+    .savings-item {
+      display: flex; flex-direction: column; align-items: center; flex-shrink: 0;
+    }
+    .savings-label {
+      font-size: 9px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--muted); margin-bottom: 2px;
+    }
+    .savings-value { font-size: 13px; font-weight: 700; }
+    .savings-seq {
+      flex: 1; font-size: 11px; color: var(--muted);
+      text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
     /* ── Export bar ── */
     .export-bar {
       background: var(--surface); border-top: 1px solid var(--border);
@@ -415,6 +455,8 @@
       <span class="btn-text">Calculate Route</span>
     </button>
 
+    <button id="optimiseBtn" onclick="optimise()">🔀 Optimise Route Order</button>
+
     <div id="errorMsg"></div>
 
     <p class="privacy-note">🔒 No data stored. Addresses are processed in real time and never retained.</p>
@@ -454,6 +496,24 @@
 
 <!-- Legs bar -->
 <div class="legs-bar hidden" id="legsBar"></div>
+
+<!-- Savings bar -->
+<div class="savings-bar hidden" id="savingsBar">
+  <div class="savings-badge">🔀 Optimised</div>
+  <div class="savings-item">
+    <div class="savings-label">Was</div>
+    <div class="savings-value" id="savingsWas" style="color:var(--muted)">—</div>
+  </div>
+  <div class="savings-item">
+    <div class="savings-label">Now</div>
+    <div class="savings-value" id="savingsNow" style="color:var(--accent2)">—</div>
+  </div>
+  <div class="savings-item">
+    <div class="savings-label">Saved</div>
+    <div class="savings-value" id="savedAmount" style="color:#a78bfa">—</div>
+  </div>
+  <div class="savings-seq" id="savingsSeq"></div>
+</div>
 
 <!-- Fuel bar -->
 <div class="fuel-bar hidden" id="fuelBar">
@@ -795,6 +855,14 @@
     document.getElementById('exportBar').classList.remove('hidden');
     document.getElementById('estimateCostBtn').style.display = 'block';
 
+    // Show/reset optimise button (only useful with 3+ stops)
+    const optimiseBtn = document.getElementById('optimiseBtn');
+    optimiseBtn.style.display = stopValues.length >= 3 ? 'block' : 'none';
+    optimiseBtn.disabled = false;
+    optimiseBtn.classList.remove('done');
+    optimiseBtn.textContent = '🔀 Optimise Route Order';
+    document.getElementById('savingsBar').classList.add('hidden');
+
     // Draw route on map
     const origin      = stopValues[0];
     const destination = stopValues[stopValues.length - 1];
@@ -960,6 +1028,115 @@
     }
 
     evBar.classList.remove('hidden');
+  }
+
+  /* ── Optimise ── */
+
+  async function optimise() {
+    if (!lastResult) return;
+    const stops = lastResult.stopValues;
+
+    if (stops.length <= 2) {
+      showError('Add at least 3 stops to optimise the route order.');
+      return;
+    }
+
+    const btn = document.getElementById('optimiseBtn');
+    btn.disabled = true;
+    btn.textContent = '🔀 Optimising…';
+    document.getElementById('errorMsg').style.display = 'none';
+
+    try {
+      const res  = await fetch(WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stops, optimize: true }),
+      });
+      const text = await res.text();
+      if (!text) throw new Error('Webhook returned an empty response.');
+      if (!res.ok)  throw new Error(`Webhook returned ${res.status}: ${text}`);
+      const data = JSON.parse(text);
+      if (data.message) throw new Error(`Workflow error: ${data.message}`);
+      displayOptimisedResults(data, stops);
+    } catch (err) {
+      showError('Could not optimise. (' + err.message + ')');
+      btn.disabled = false;
+      btn.textContent = '🔀 Optimise Route Order';
+    }
+  }
+
+  function displayOptimisedResults(data, originalStops) {
+    const originalKm   = lastResult.totalKm;
+    const originalMins = lastResult.totalMins;
+
+    // Build optimised stop label sequence using waypoint_order
+    const waypointOrder = data.waypoint_order || [];
+    const n = originalStops.length;
+    const labelSeq = [STOP_LABELS[0]];
+    for (const wi of waypointOrder) labelSeq.push(STOP_LABELS[wi + 1]);
+    labelSeq.push(STOP_LABELS[n - 1]);
+
+    // Build optimised stop addresses in new order (for map redraw)
+    const intermediates = originalStops.slice(1, -1);
+    const optimisedStops = [
+      originalStops[0],
+      ...waypointOrder.map(i => intermediates[i]),
+      originalStops[n - 1],
+    ];
+
+    // Update lastResult
+    lastResult.totalKm   = data.total_km;
+    lastResult.totalMins = data.total_mins;
+    lastResult.data      = data;
+
+    // Update stats bar
+    document.getElementById('statTotalKm').textContent   = data.total_km + ' km';
+    document.getElementById('statTotalDur').textContent  = data.total_duration;
+    document.getElementById('statTotalMins').textContent = data.total_mins + ' mins total';
+
+    // Update legs bar
+    renderLegsBar(data.legs);
+
+    // Show savings bar
+    const savedKm   = parseFloat((originalKm - data.total_km).toFixed(2));
+    const savedMins = originalMins - data.total_mins;
+
+    document.getElementById('savingsWas').textContent = originalKm + ' km';
+    document.getElementById('savingsNow').textContent = data.total_km + ' km';
+
+    const savedAmountEl = document.getElementById('savedAmount');
+    if (savedKm > 0 || savedMins > 0) {
+      savedAmountEl.textContent  = `${savedKm} km · ${savedMins} min`;
+      savedAmountEl.style.color  = '#a78bfa';
+    } else {
+      savedAmountEl.textContent  = 'Already optimal';
+      savedAmountEl.style.color  = 'var(--muted)';
+    }
+
+    document.getElementById('savingsSeq').textContent = labelSeq.join(' → ');
+    document.getElementById('savingsBar').classList.remove('hidden');
+
+    // Recalc fuel/EV with new distance
+    recalcFuel();
+    recalcEV();
+
+    // Redraw map with optimised order
+    const origin      = optimisedStops[0];
+    const destination = optimisedStops[optimisedStops.length - 1];
+    const waypoints   = optimisedStops.slice(1, -1).map(addr => ({ location: addr, stopover: true }));
+    directionsService.route({
+      origin, destination, waypoints,
+      travelMode: google.maps.TravelMode.DRIVING,
+    }, (result, status) => {
+      if (status === 'OK') directionsRenderer.setDirections(result);
+      placeMarkers(data.legs, optimisedStops);
+    });
+
+    // Update button
+    const btn = document.getElementById('optimiseBtn');
+    btn.disabled = false;
+    btn.classList.add('done');
+    btn.textContent = '✓ Route Optimised';
   }
 
   /* ── Utilities ── */
