@@ -227,9 +227,11 @@
     /* ── EV Feasibility bar ── */
     .ev-bar {
       background: var(--bg); border-top: 1px solid var(--border);
-      display: flex; align-items: center; flex-shrink: 0;
+      display: flex; flex-direction: column; flex-shrink: 0;
     }
     .ev-bar.hidden { display: none; }
+
+    .ev-items { display: flex; align-items: stretch; }
 
     .ev-item {
       flex: 1; display: flex; flex-direction: column;
@@ -246,17 +248,16 @@
     .ev-sub   { font-size: 11px; color: var(--muted); margin-top: 1px; }
     .ev-note  {
       font-size: 10px; color: var(--muted); text-align: center;
-      padding: 4px 20px; border-top: 1px solid var(--border);
-      width: 100%; flex-shrink: 0;
+      padding: 3px 20px; border-top: 1px solid var(--border);
     }
 
     @media (max-width: 768px) {
-      .ev-bar { flex-wrap: wrap; padding: 4px 0; }
+      .ev-items { flex-wrap: wrap; padding: 4px 0; }
       .ev-item {
         flex: 1 1 45%; border-right: none;
         border-bottom: 1px solid var(--border); padding: 10px 16px;
       }
-      .ev-item:last-child { flex: 1 1 100%; border-bottom: none; }
+      .ev-item:last-child { border-bottom: none; }
     }
 
     /* ── Fuel cost estimation ── */
@@ -540,25 +541,27 @@
 </div>
 
 <div class="ev-bar hidden" id="evBar">
-  <div class="ev-item">
-    <div class="ev-label">Single Charge?</div>
-    <div class="ev-value" id="evFeasible">—</div>
-    <div class="ev-sub"   id="evFeasibleSub">—</div>
-  </div>
-  <div class="ev-item">
-    <div class="ev-label">Daily Energy</div>
-    <div class="ev-value" id="evEnergy">—</div>
-    <div class="ev-sub"   id="evEnergySub">—</div>
-  </div>
-  <div class="ev-item">
-    <div class="ev-label">Annual EV Cost</div>
-    <div class="ev-value" id="evAnnualCost">—</div>
-    <div class="ev-sub"   id="evAnnualCostSub">—</div>
-  </div>
-  <div class="ev-item">
-    <div class="ev-label">Annual Savings vs ICE</div>
-    <div class="ev-value" id="evSavings">—</div>
-    <div class="ev-sub"   id="evSavingsSub">—</div>
+  <div class="ev-items">
+    <div class="ev-item">
+      <div class="ev-label">Single Charge?</div>
+      <div class="ev-value" id="evFeasible">—</div>
+      <div class="ev-sub"   id="evFeasibleSub">—</div>
+    </div>
+    <div class="ev-item">
+      <div class="ev-label">Daily Energy</div>
+      <div class="ev-value" id="evEnergy">—</div>
+      <div class="ev-sub"   id="evEnergySub">—</div>
+    </div>
+    <div class="ev-item">
+      <div class="ev-label">Annual EV Cost</div>
+      <div class="ev-value" id="evAnnualCost">—</div>
+      <div class="ev-sub"   id="evAnnualCostSub">—</div>
+    </div>
+    <div class="ev-item">
+      <div class="ev-label">Annual Savings vs ICE</div>
+      <div class="ev-value" id="evSavings">—</div>
+      <div class="ev-sub"   id="evSavingsSub">—</div>
+    </div>
   </div>
   <div class="ev-note">⚡ Assumes home charging overnight · 85% usable range · WLTP rated figures</div>
 </div>
