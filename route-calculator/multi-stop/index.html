@@ -136,6 +136,8 @@
     }
     button#calcBtn:hover:not(:disabled) { background: #3b7de8; }
     button#calcBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+    button#calcBtn.optimiser { background: #7c3aed; }
+    button#calcBtn.optimiser:hover:not(:disabled) { background: #6d28d9; }
 
     .spinner {
       width: 14px; height: 14px;
@@ -582,6 +584,7 @@
   const WEBHOOK_URL    = '__WEBHOOK_URL_MULTI__';
   const MAPS_API_KEY   = '__MAPS_API_KEY__';
   const MAX_FREE_STOPS = 10;
+  const IS_OPTIMISER   = new URLSearchParams(location.search).get('mode') === 'optimise';
 
   const STOP_COLORS = ['#4f8ef7','#34d399','#f59e0b','#a78bfa','#fb923c','#e879f9','#4ade80','#60a5fa','#f472b6','#facc15'];
   const STOP_LABELS = 'ABCDEFGHIJ'.split('');
@@ -826,6 +829,13 @@
     // Add 2 default stops and attach autocomplete
     addStop();
     addStop();
+
+    if (IS_OPTIMISER) {
+      document.title = 'Route Optimiser — Path2Anywhere';
+      document.querySelector('.breadcrumb span:last-child').textContent = 'Route Optimiser';
+      document.querySelector('#calcBtn .btn-text').textContent = 'Optimise Route';
+      document.getElementById('calcBtn').classList.add('optimiser');
+    }
   }
 
   /* ── Calculate ── */
@@ -845,14 +855,25 @@
       const res  = await fetch(WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stops }),
+        body: JSON.stringify(IS_OPTIMISER ? { stops, optimize: true } : { stops }),
       });
       const text = await res.text();
       if (!text) throw new Error('Webhook returned an empty response — check the n8n execution log.');
       if (!res.ok) throw new Error(`Webhook returned ${res.status}: ${text}`);
       const data = JSON.parse(text);
       if (data.message) throw new Error(`Workflow error: ${data.message}`);
-      displayResults(data, stops);
+
+      if (IS_OPTIMISER) {
+        // Reorder stops by waypoint_order so map/legs match the optimised route
+        const waypointOrder = data.waypoint_order || [];
+        const intermediates = stops.slice(1, -1);
+        const orderedStops = (waypointOrder.length === intermediates.length && intermediates.length > 0)
+          ? [stops[0], ...waypointOrder.map(i => intermediates[i]), stops[stops.length - 1]]
+          : [...stops];
+        displayResults(data, orderedStops);
+      } else {
+        displayResults(data, stops);
+      }
     } catch (err) {
       showError('Could not calculate route. (' + err.message + ')');
     } finally {
@@ -888,9 +909,9 @@
     document.getElementById('exportBar').classList.remove('hidden');
     document.getElementById('estimateCostBtn').style.display = 'block';
 
-    // Show/reset optimise button (only useful with 3+ stops)
+    // Show/reset optimise button (only useful with 3+ stops; hidden in optimiser mode)
     const optimiseBtn = document.getElementById('optimiseBtn');
-    optimiseBtn.style.display = stopValues.length >= 3 ? 'block' : 'none';
+    optimiseBtn.style.display = (!IS_OPTIMISER && stopValues.length >= 3) ? 'block' : 'none';
     optimiseBtn.disabled = false;
     optimiseBtn.classList.remove('done');
     optimiseBtn.textContent = '🔀 Optimise Route Order';
