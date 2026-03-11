@@ -371,7 +371,7 @@
     <div class="field-group">
       <label>Office Days per Week</label>
       <div class="days-row">
-        <input id="daysInput" type="number" min="1" max="7" value="5" onchange="recalcFuel()" />
+        <input id="daysInput" type="number" min="1" max="7" value="5" oninput="syncDays('office'); recalcFuel()" />
         <span>days/week in office</span>
       </div>
     </div>
@@ -379,7 +379,7 @@
     <div class="field-group">
       <label>WFH Days per Week</label>
       <div class="days-row">
-        <input id="wfhDaysInput" type="number" min="0" max="7" value="0" onchange="recalcFuel()" />
+        <input id="wfhDaysInput" type="number" min="0" max="6" value="0" oninput="syncDays('wfh'); recalcFuel()" />
         <span>days/week from home</span>
       </div>
     </div>
@@ -712,6 +712,19 @@
         label: { text: label, color: '#0f1117', fontSize: '11px', fontWeight: '700' },
       });
     });
+  }
+
+  function syncDays(changed) {
+    const officeEl = document.getElementById('daysInput');
+    const wfhEl    = document.getElementById('wfhDaysInput');
+    let office = parseFloat(officeEl.value) || 0;
+    let wfh    = parseFloat(wfhEl.value)    || 0;
+    if (office + wfh > 7) {
+      if (changed === 'office') wfhEl.value    = Math.max(0, 7 - office);
+      else                      officeEl.value = Math.max(1, 7 - wfh);
+    }
+    officeEl.max = 7 - (parseFloat(wfhEl.value)    || 0);
+    wfhEl.max    = 7 - (parseFloat(officeEl.value) || 0);
   }
 
   function recalcFuel() {
