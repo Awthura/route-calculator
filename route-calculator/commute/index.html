@@ -193,6 +193,37 @@
     .fuel-item.monthly-f .fuel-value { color: var(--accent2); }
     .fuel-cost { font-size: 12px; color: #f59e0b; margin-top: 3px; font-weight: 600; }
 
+    /* ── WFH savings bar ── */
+    .wfh-bar {
+      background: var(--surface); border-top: 1px solid var(--border);
+      display: flex; align-items: center; flex-shrink: 0;
+    }
+    .wfh-bar.hidden { display: none; }
+
+    .wfh-item {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      border-right: 1px solid var(--border); padding: 10px 16px;
+    }
+    .wfh-item:last-child { border-right: none; }
+
+    .wfh-label {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--muted); margin-bottom: 3px;
+    }
+    .wfh-value { font-size: 14px; font-weight: 700; color: #a78bfa; }
+    .wfh-sub   { font-size: 11px; color: var(--muted); margin-top: 1px; }
+    .wfh-item.cost-item .wfh-value { color: var(--accent2); }
+
+    @media (max-width: 768px) {
+      .wfh-bar { flex-wrap: wrap; padding: 4px 0; }
+      .wfh-item {
+        flex: 1 1 45%; border-right: none;
+        border-bottom: 1px solid var(--border); padding: 10px 16px;
+      }
+      .wfh-item:last-child { flex: 1 1 100%; border-bottom: none; }
+    }
+
     /* ── Fuel cost estimation ── */
     #estimateCostBtn {
       display: none; background: transparent; color: var(--accent2);
@@ -338,10 +369,18 @@
     </div>
 
     <div class="field-group">
-      <label>Working Days per Week</label>
+      <label>Office Days per Week</label>
       <div class="days-row">
         <input id="daysInput" type="number" min="1" max="7" value="5" onchange="recalcFuel()" />
-        <span>days/week (×4.33 for monthly)</span>
+        <span>days/week in office</span>
+      </div>
+    </div>
+
+    <div class="field-group">
+      <label>WFH Days per Week</label>
+      <div class="days-row">
+        <input id="wfhDaysInput" type="number" min="0" max="7" value="0" onchange="recalcFuel()" />
+        <span>days/week from home</span>
       </div>
     </div>
 
@@ -411,6 +450,29 @@
     <div class="fuel-value" id="monthlyFuel">—</div>
     <div class="fuel-co2"   id="monthlyCo2">—</div>
     <div class="fuel-cost"  id="monthlyCost"></div>
+  </div>
+</div>
+
+<div class="wfh-bar hidden" id="wfhBar">
+  <div class="wfh-item">
+    <div class="wfh-label">Time Back / Year</div>
+    <div class="wfh-value" id="wfhHours">—</div>
+    <div class="wfh-sub"   id="wfhHoursSub">—</div>
+  </div>
+  <div class="wfh-item">
+    <div class="wfh-label">km Not Driven / Year</div>
+    <div class="wfh-value" id="wfhKm">—</div>
+    <div class="wfh-sub"   id="wfhKmSub">—</div>
+  </div>
+  <div class="wfh-item">
+    <div class="wfh-label">CO₂ Avoided / Year</div>
+    <div class="wfh-value" id="wfhCo2">—</div>
+    <div class="wfh-sub"   id="wfhCo2Sub">—</div>
+  </div>
+  <div class="wfh-item cost-item">
+    <div class="wfh-label">Cost Saved / Year</div>
+    <div class="wfh-value" id="wfhCost">—</div>
+    <div class="wfh-sub"   id="wfhCostSub"></div>
   </div>
 </div>
 
@@ -620,7 +682,7 @@
     document.getElementById('exportBar').classList.remove('hidden');
 
     document.getElementById('estimateCostBtn').style.display = 'block';
-    lastResult = { data, homeAddr, workAddr, totalDurText, totKm };
+    lastResult = { data, homeAddr, workAddr, totalDurText, totKm, totalMins };
     recalcFuel();
 
     // Draw outbound route on map
@@ -694,6 +756,67 @@
 
     document.getElementById('fuelBar').classList.remove('hidden');
     lastResult.fuelData = { unit, dailyFuel, dailyCo2, weeklyFuel, weeklyCo2, monthlyFuel, monthlyCo2, days, vehicleKey };
+    recalcWFH();
+  }
+
+  function recalcWFH() {
+    if (!lastResult) return;
+    const wfhDays = parseFloat(document.getElementById('wfhDaysInput').value) || 0;
+    const wfhBar = document.getElementById('wfhBar');
+    if (wfhDays <= 0) { wfhBar.classList.add('hidden'); return; }
+
+    const annualWfhDays = wfhDays * 52;
+
+    // Time saved
+    const annualMins = annualWfhDays * lastResult.totalMins;
+    const annualHrs  = Math.round(annualMins / 60);
+    const weeklyMins = wfhDays * lastResult.totalMins;
+    const wkH = Math.floor(weeklyMins / 60), wkM = weeklyMins % 60;
+    const weeklyText = wkH > 0 ? `${wkH}h ${wkM}m/week` : `${wkM} mins/week`;
+    document.getElementById('wfhHours').textContent   = `${annualHrs} hrs`;
+    document.getElementById('wfhHoursSub').textContent = weeklyText;
+
+    // km avoided
+    const annualKm  = Math.round(annualWfhDays * lastResult.totKm);
+    const weeklyKm  = parseFloat((wfhDays * lastResult.totKm).toFixed(1));
+    document.getElementById('wfhKm').textContent    = annualKm.toLocaleString() + ' km';
+    document.getElementById('wfhKmSub').textContent = `${weeklyKm} km/week`;
+
+    // CO₂ avoided
+    if (lastResult.fuelData) {
+      const { dailyCo2 } = lastResult.fuelData;
+      const annualCo2 = parseFloat((dailyCo2 * annualWfhDays).toFixed(0));
+      const weeklyCo2 = parseFloat((dailyCo2 * wfhDays).toFixed(1));
+      document.getElementById('wfhCo2').textContent    = `${annualCo2} kg`;
+      document.getElementById('wfhCo2Sub').textContent = `${weeklyCo2} kg/week`;
+    } else {
+      document.getElementById('wfhCo2').textContent    = '—';
+      document.getElementById('wfhCo2Sub').textContent = 'Select a vehicle';
+    }
+
+    // Cost saved
+    if (costEnabled && lastResult.fuelData) {
+      const priceInput = parseFloat(document.getElementById('fuelPriceInput').value);
+      const entry = fuelPrices && detectedCountryCode && fuelPrices.countries[detectedCountryCode];
+      const displayMult = (!lastResult.fuelData.vehicleKey.includes('electric') && entry && entry.display_multiplier) || 1;
+      const sym = entry ? entry.symbol : '€';
+      if (!isNaN(priceInput) && priceInput > 0) {
+        const ppl = priceInput / displayMult;
+        const { dailyFuel } = lastResult.fuelData;
+        const annualCost = (dailyFuel * ppl * annualWfhDays).toFixed(0);
+        const weeklyCost = (dailyFuel * ppl * wfhDays).toFixed(2);
+        document.getElementById('wfhCost').textContent    = sym + parseInt(annualCost).toLocaleString();
+        document.getElementById('wfhCostSub').textContent = `${sym}${weeklyCost}/week`;
+      } else {
+        document.getElementById('wfhCost').textContent    = '—';
+        document.getElementById('wfhCostSub').textContent = '';
+      }
+    } else {
+      document.getElementById('wfhCost').textContent    = '—';
+      document.getElementById('wfhCostSub').textContent = costEnabled ? '' : 'Add fuel price →';
+    }
+
+    wfhBar.classList.remove('hidden');
   }
 
   function showError(msg) {
@@ -744,6 +867,18 @@
           );
         }
       }
+    }
+    const wfhDays = parseFloat(document.getElementById('wfhDaysInput').value) || 0;
+    if (wfhDays > 0) {
+      const annualWfhDays = wfhDays * 52;
+      const annualHrs = Math.round(annualWfhDays * lastResult.totalMins / 60);
+      const annualKm  = Math.round(annualWfhDays * totKm);
+      rows.push(['WFH Days/Week', wfhDays], ['Annual Hours Back', annualHrs], ['Annual km Avoided', annualKm]);
+      if (lastResult.fuelData) {
+        rows.push(['Annual CO₂ Avoided (kg)', parseFloat((lastResult.fuelData.dailyCo2 * annualWfhDays).toFixed(0))]);
+      }
+      const wfhCostEl = document.getElementById('wfhCost').textContent;
+      if (wfhCostEl && wfhCostEl !== '—') rows.push(['Annual Cost Saved', wfhCostEl]);
     }
     const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
