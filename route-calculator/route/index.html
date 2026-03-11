@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Route Planner — Path2Anywhere</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0f1117;
+      --surface:  #1a1d27;
+      --border:   #2a2d3a;
+      --accent:   #4f8ef7;
+      --accent2:  #34d399;
+      --amber:    #f59e0b;
+      --text:     #e2e8f0;
+      --muted:    #64748b;
+      --danger:   #f87171;
+      --sidebar-w: 300px;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg); color: var(--text);
+      height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 0 20px; height: 52px;
+      display: flex; align-items: center; gap: 10px; flex-shrink: 0; z-index: 10;
+    }
+    header .logo { height: 32px; width: 32px; flex-shrink: 0; }
+    header h1 { font-size: 15px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
+    header .breadcrumb {
+      font-size: 13px; color: var(--muted);
+      display: flex; align-items: center; gap: 6px; margin-left: 4px;
+    }
+    header .breadcrumb a { color: var(--muted); text-decoration: none; }
+    header .breadcrumb a:hover { color: var(--text); }
+    header .breadcrumb .sep { color: var(--border); }
+
+    /* ── Layout ── */
+    .main { flex: 1; display: flex; overflow: hidden; }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: var(--sidebar-w); background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 20px 16px; display: flex; flex-direction: column; gap: 16px;
+      overflow-y: auto; flex-shrink: 0;
+    }
+
+    .field-group label {
+      display: block; font-size: 10px; font-weight: 700;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 6px;
+    }
+    .field-group .dot {
+      display: inline-block; width: 8px; height: 8px;
+      border-radius: 50%; margin-right: 6px; vertical-align: middle;
+    }
+    .dot-a { background: var(--accent); }
+    .dot-b { background: var(--accent2); }
+
+    .field-group input, .field-group select {
+      width: 100%; background: var(--bg);
+      border: 1px solid var(--border); border-radius: 6px;
+      color: var(--text); font-size: 13px; padding: 9px 10px;
+      outline: none; transition: border-color 0.15s;
+    }
+    .field-group input:focus, .field-group select:focus { border-color: var(--accent); }
+    .field-group input::placeholder { color: var(--muted); }
+    .field-group select {
+      cursor: pointer; appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 10px center;
+    }
+    .field-group select option { background: var(--surface); }
+
+    /* ── Round trip toggle ── */
+    .trip-mode {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .toggle-wrap { position: relative; width: 44px; height: 24px; flex-shrink: 0; }
+    .toggle-wrap input { opacity: 0; width: 0; height: 0; position: absolute; }
+    .toggle-track {
+      position: absolute; inset: 0;
+      background: var(--border); border-radius: 12px;
+      cursor: pointer; transition: background 0.2s;
+    }
+    .toggle-track::after {
+      content: ''; position: absolute;
+      width: 18px; height: 18px; left: 3px; top: 3px;
+      background: #fff; border-radius: 50%; transition: transform 0.2s;
+    }
+    .toggle-wrap input:checked ~ .toggle-track { background: var(--accent); }
+    .toggle-wrap input:checked ~ .toggle-track::after { transform: translateX(20px); }
+    .trip-label { font-size: 12px; color: var(--muted); transition: color 0.15s; user-select: none; }
+    .trip-label.active { color: var(--text); font-weight: 600; }
+
+    .divider { height: 1px; background: var(--border); }
+
+    button#calcBtn {
+      width: 100%; background: var(--accent); color: #fff;
+      border: none; border-radius: 6px; padding: 11px;
+      font-size: 13px; font-weight: 600; cursor: pointer;
+      letter-spacing: 0.04em; display: flex;
+      align-items: center; justify-content: center; gap: 8px;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    button#calcBtn:hover:not(:disabled) { background: #3b7de8; }
+    button#calcBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff; border-radius: 50%;
+      animation: spin 0.7s linear infinite; display: none;
+    }
+    button#calcBtn.loading .spinner { display: block; }
+    button#calcBtn.loading .btn-text { display: none; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .privacy-note {
+      font-size: 11px; color: var(--muted);
+      line-height: 1.5; text-align: center; opacity: 0.5;
+    }
+
+    #errorMsg {
+      font-size: 12px; color: var(--danger);
+      background: rgba(248,113,113,0.1);
+      border: 1px solid rgba(248,113,113,0.25);
+      border-radius: 6px; padding: 8px 10px; display: none;
+    }
+
+    /* ── Fuel cost estimation ── */
+    #estimateCostBtn {
+      display: none; background: transparent; color: var(--accent2);
+      border: 1px solid var(--accent2); border-radius: 8px;
+      padding: 9px 16px; font-size: 12px; font-weight: 600;
+      cursor: pointer; letter-spacing: 0.04em; width: 100%;
+      transition: background 0.15s, color 0.15s;
+    }
+    #estimateCostBtn:hover { background: var(--accent2); color: #0f1117; }
+    #estimateCostBtn:disabled { opacity: 0.6; cursor: default; }
+    .cost-section { display: none; flex-direction: column; gap: 10px; }
+    .cost-section.visible { display: flex; }
+    .price-row { display: flex; align-items: center; gap: 6px; }
+    .price-row input[type=number] {
+      flex: 1; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; padding: 7px 10px; color: var(--text);
+      font-size: 14px; font-weight: 700; min-width: 0;
+    }
+    .price-row input[type=number]:focus { outline: none; border-color: var(--accent); }
+    .price-currency { font-size: 12px; color: var(--muted); white-space: nowrap; }
+    .price-hint { font-size: 11px; color: var(--muted); margin-top: 3px; }
+    .price-warn { font-size: 11px; color: #f59e0b; margin-top: 3px; }
+    .price-warn.danger { color: var(--danger); }
+
+    /* ── Map ── */
+    #map { flex: 1; background: #1c1f2b; }
+
+    /* ── Stats bar ── */
+    .stats-bar {
+      background: var(--surface); border-top: 1px solid var(--border);
+      display: flex; align-items: center; flex-shrink: 0;
+    }
+    .stats-bar.hidden { display: none; }
+    .stat-item {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      border-right: 1px solid var(--border); padding: 12px 16px;
+    }
+    .stat-item:last-child { border-right: none; }
+    .stat-label {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--muted); margin-bottom: 4px;
+    }
+    .stat-value { font-size: 18px; font-weight: 700; }
+    .stat-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .stat-item.oneway .stat-value   { color: var(--accent); }
+    .stat-item.roundtrip .stat-value { color: var(--accent2); }
+    .stat-item.roundtrip.inactive .stat-value { color: var(--muted); }
+    .stat-item.roundtrip.inactive .stat-sub   { color: var(--border); }
+
+    /* ── Fuel bar ── */
+    .fuel-bar {
+      background: var(--bg); border-top: 1px solid var(--border);
+      display: flex; align-items: center; flex-shrink: 0;
+    }
+    .fuel-bar.hidden { display: none; }
+    .fuel-item {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      border-right: 1px solid var(--border); padding: 10px 16px;
+    }
+    .fuel-item:last-child { border-right: none; }
+    .fuel-label {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--muted); margin-bottom: 3px;
+    }
+    .fuel-value { font-size: 14px; font-weight: 700; }
+    .fuel-co2   { font-size: 11px; color: var(--accent2); margin-top: 1px; }
+    .fuel-cost  { font-size: 12px; color: var(--amber); margin-top: 3px; font-weight: 600; }
+    .fuel-item.fuel-f  .fuel-value { color: var(--amber); }
+    .fuel-item.co2-f   .fuel-value { color: var(--accent2); }
+    .fuel-item.cost-f  .fuel-value { color: var(--accent); }
+
+    /* ── EV bar ── */
+    .ev-bar {
+      background: var(--surface); border-top: 1px solid var(--border);
+      display: flex; flex-direction: column; flex-shrink: 0;
+    }
+    .ev-bar.hidden { display: none; }
+    .ev-items { display: flex; align-items: stretch; }
+    .ev-item {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      border-right: 1px solid var(--border); padding: 10px 16px;
+    }
+    .ev-item:last-child { border-right: none; }
+    .ev-label {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--muted); margin-bottom: 3px;
+    }
+    .ev-value { font-size: 14px; font-weight: 700; color: #06b6d4; }
+    .ev-sub   { font-size: 11px; color: var(--muted); margin-top: 1px; }
+    .ev-note  {
+      font-size: 10px; color: var(--muted); text-align: center;
+      padding: 3px 20px; border-top: 1px solid var(--border);
+    }
+
+    /* ── Export bar ── */
+    .export-bar {
+      background: var(--surface); border-top: 1px solid var(--border);
+      padding: 10px 20px; display: flex; justify-content: flex-end; flex-shrink: 0;
+    }
+    .export-bar.hidden { display: none; }
+    button#exportBtn {
+      background: transparent; color: var(--accent);
+      border: 1px solid var(--accent); border-radius: 6px;
+      padding: 6px 14px; font-size: 12px; font-weight: 600;
+      cursor: pointer; letter-spacing: 0.04em;
+      display: flex; align-items: center; gap: 6px;
+      transition: background 0.15s, color 0.15s;
+    }
+    button#exportBtn:hover { background: var(--accent); color: #fff; }
+
+    /* ── Autocomplete ── */
+    .pac-container {
+      background: var(--surface) !important; border: 1px solid var(--border) !important;
+      border-radius: 6px !important; box-shadow: 0 8px 24px rgba(0,0,0,0.4) !important;
+      font-family: inherit !important;
+    }
+    .pac-item {
+      background: var(--surface) !important; color: var(--text) !important;
+      border-top: 1px solid var(--border) !important;
+      font-size: 13px !important; padding: 6px 10px !important;
+    }
+    .pac-item:hover, .pac-item-selected { background: var(--border) !important; }
+    .pac-item-query { color: var(--text) !important; }
+    .pac-matched { font-weight: 700; color: var(--accent) !important; }
+
+    /* ── Mobile ── */
+    @media (max-width: 768px) {
+      body { height: auto; overflow: auto; }
+      .main { flex-direction: column; overflow: visible; }
+      .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); padding: 16px; gap: 12px; overflow-y: visible; }
+      #map { height: 55vw; min-height: 260px; max-height: 420px; flex: none; }
+      .stats-bar { flex-wrap: wrap; padding: 8px 0; }
+      .stat-item { flex: 1 1 45%; border-right: none; border-bottom: 1px solid var(--border); padding: 10px 16px; }
+      .stat-item:last-child { flex: 1 1 100%; border-bottom: none; }
+      .stat-value { font-size: 18px; }
+      .fuel-bar { flex-wrap: wrap; padding: 4px 0; }
+      .fuel-item { flex: 1 1 45%; border-right: none; border-bottom: 1px solid var(--border); padding: 10px 16px; }
+      .fuel-item:last-child { flex: 1 1 100%; border-bottom: none; }
+      .ev-items { flex-wrap: wrap; padding: 4px 0; }
+      .ev-item { flex: 1 1 45%; border-right: none; border-bottom: 1px solid var(--border); padding: 10px 16px; }
+      .ev-item:last-child { border-bottom: none; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <img class="logo" src="../../logo.svg" alt="Path2Anywhere" />
+  <h1>Path2Anywhere</h1>
+  <div class="breadcrumb">
+    <span class="sep">/</span>
+    <a href="../../">Home</a>
+    <span class="sep">/</span>
+    <a href="../">Route Calculator</a>
+    <span class="sep">/</span>
+    <span>Route Planner</span>
+  </div>
+</header>
+
+<div class="main">
+  <aside class="sidebar">
+
+    <div class="field-group">
+      <label><span class="dot dot-a"></span>From</label>
+      <input id="fromInput" type="text" placeholder="e.g. London, UK" autocomplete="off" />
+    </div>
+
+    <div class="field-group">
+      <label><span class="dot dot-b"></span>To</label>
+      <input id="toInput" type="text" placeholder="e.g. Manchester, UK" autocomplete="off" />
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="field-group">
+      <label>Trip Type</label>
+      <div class="trip-mode">
+        <span class="trip-label active" id="labelOneWay">One Way</span>
+        <label class="toggle-wrap">
+          <input type="checkbox" id="roundTripToggle" onchange="onToggleRoundTrip()" />
+          <span class="toggle-track"></span>
+        </label>
+        <span class="trip-label" id="labelRoundTrip">Round Trip</span>
+      </div>
+    </div>
+
+    <div class="field-group">
+      <label>Vehicle Type</label>
+      <select id="vehicleSelect" onchange="recalcFuel()">
+        <option value="">— Select vehicle —</option>
+        <optgroup label="Petrol">
+          <option value="small_petrol">Small Car (6 L/100km)</option>
+          <option value="medium_petrol" selected>Medium Car (8 L/100km)</option>
+          <option value="suv_petrol">SUV (11 L/100km)</option>
+        </optgroup>
+        <optgroup label="Diesel">
+          <option value="small_diesel">Small Car (5 L/100km)</option>
+          <option value="medium_diesel">Medium Car (6.5 L/100km)</option>
+          <option value="small_van_diesel">Small Van (9 L/100km)</option>
+          <option value="large_van_diesel">Large Van (13 L/100km)</option>
+          <option value="truck_diesel">Truck / HGV (35 L/100km)</option>
+        </optgroup>
+        <optgroup label="Electric">
+          <option value="electric_car">Electric Car (18 kWh/100km)</option>
+          <option value="electric_van">Electric Van (28 kWh/100km)</option>
+        </optgroup>
+      </select>
+    </div>
+
+    <div class="field-group">
+      <label>⚡ Compare with EV</label>
+      <select id="evSelect" onchange="recalcEV()">
+        <option value="">— No EV comparison —</option>
+        <optgroup label="Tesla">
+          <option value="tesla_m3_lr">Tesla Model 3 LR (580 km)</option>
+          <option value="tesla_my_lr">Tesla Model Y LR (533 km)</option>
+        </optgroup>
+        <optgroup label="Volkswagen">
+          <option value="vw_id4">VW ID.4 Pro (520 km)</option>
+          <option value="vw_id3">VW ID.3 Pro S (420 km)</option>
+        </optgroup>
+        <optgroup label="BMW">
+          <option value="bmw_i4">BMW i4 eDrive40 (590 km)</option>
+          <option value="bmw_ix">BMW iX xDrive50 (630 km)</option>
+        </optgroup>
+        <optgroup label="Hyundai / Kia">
+          <option value="hyundai_ioniq6">Hyundai IONIQ 6 LR (614 km)</option>
+          <option value="hyundai_ioniq5">Hyundai IONIQ 5 LR (507 km)</option>
+        </optgroup>
+        <optgroup label="Other">
+          <option value="renault_zoe">Renault Zoe R135 (395 km)</option>
+          <option value="nissan_leaf">Nissan Leaf 40 kWh (270 km)</option>
+          <option value="peugeot_e208">Peugeot e-208 (362 km)</option>
+        </optgroup>
+      </select>
+    </div>
+
+    <div class="divider"></div>
+
+    <button id="calcBtn" onclick="calculate()">
+      <div class="spinner"></div>
+      <span class="btn-text">Calculate Route</span>
+    </button>
+
+    <div id="errorMsg"></div>
+
+    <p class="privacy-note">🔒 No data stored. Addresses are processed in real time and never retained.</p>
+
+    <button id="estimateCostBtn" onclick="startCostEstimation()">⛽ Estimate Fuel Cost</button>
+
+    <div class="cost-section" id="costSection">
+      <div class="field-group">
+        <label id="priceLabel">Fuel Price</label>
+        <div class="price-row">
+          <input type="number" id="fuelPriceInput" min="0" step="0.001" oninput="onFuelPriceInput()" />
+          <span class="price-currency" id="priceCurrency">€/L</span>
+        </div>
+        <div class="price-hint" id="priceHint"></div>
+        <div class="price-warn" id="priceWarn"></div>
+      </div>
+    </div>
+
+  </aside>
+
+  <div id="map"></div>
+</div>
+
+<!-- Stats bar -->
+<div class="stats-bar hidden" id="statsBar">
+  <div class="stat-item oneway">
+    <div class="stat-label" id="statLabelOneWay">One Way</div>
+    <div class="stat-value" id="statDistOneWay">—</div>
+    <div class="stat-sub"  id="statDurOneWay">—</div>
+  </div>
+  <div class="stat-item roundtrip inactive" id="statRoundTripItem">
+    <div class="stat-label">Round Trip</div>
+    <div class="stat-value" id="statDistRoundTrip">—</div>
+    <div class="stat-sub"  id="statDurRoundTrip">—</div>
+  </div>
+</div>
+
+<!-- Fuel bar -->
+<div class="fuel-bar hidden" id="fuelBar">
+  <div class="fuel-item fuel-f">
+    <div class="fuel-label" id="fuelBarLabel">Fuel — One Way</div>
+    <div class="fuel-value" id="fuelUsed">—</div>
+    <div class="fuel-co2"   id="fuelCo2">—</div>
+  </div>
+  <div class="fuel-item co2-f">
+    <div class="fuel-label">CO₂ Footprint</div>
+    <div class="fuel-value" id="fuelCo2Big">—</div>
+    <div class="fuel-co2"   id="fuelCo2Sub">kg CO₂</div>
+  </div>
+  <div class="fuel-item cost-f">
+    <div class="fuel-label">Est. Fuel Cost</div>
+    <div class="fuel-value" id="fuelCostBig">—</div>
+    <div class="fuel-co2"   id="fuelCostSub">add fuel price →</div>
+  </div>
+</div>
+
+<!-- EV bar -->
+<div class="ev-bar hidden" id="evBar">
+  <div class="ev-items">
+    <div class="ev-item">
+      <div class="ev-label">Single Charge?</div>
+      <div class="ev-value" id="evFeasible">—</div>
+      <div class="ev-sub"   id="evFeasibleSub">—</div>
+    </div>
+    <div class="ev-item">
+      <div class="ev-label">Trip Energy</div>
+      <div class="ev-value" id="evEnergy">—</div>
+      <div class="ev-sub"   id="evEnergySub">—</div>
+    </div>
+    <div class="ev-item">
+      <div class="ev-label">Trip EV Cost</div>
+      <div class="ev-value" id="evTripCost">—</div>
+      <div class="ev-sub"   id="evTripCostSub">—</div>
+    </div>
+    <div class="ev-item">
+      <div class="ev-label">Savings vs ICE</div>
+      <div class="ev-value" id="evSavings">—</div>
+      <div class="ev-sub"   id="evSavingsSub">—</div>
+    </div>
+  </div>
+  <div class="ev-note">⚡ Assumes 85% usable range · WLTP rated figures · no en-route charging modelled</div>
+</div>
+
+<!-- Export bar -->
+<div class="export-bar hidden" id="exportBar">
+  <button id="exportBtn" onclick="exportCSV()">⬇ Export CSV</button>
+</div>
+
+<script>
+  const WEBHOOK_URL  = '__WEBHOOK_URL_MULTI__';
+  const MAPS_API_KEY = '__MAPS_API_KEY__';
+
+  const EV_MODELS = {
+    tesla_m3_lr:    { name: 'Tesla Model 3 LR',   range: 580, consumption: 14.0 },
+    tesla_my_lr:    { name: 'Tesla Model Y LR',   range: 533, consumption: 16.0 },
+    vw_id4:         { name: 'VW ID.4 Pro',        range: 520, consumption: 16.5 },
+    vw_id3:         { name: 'VW ID.3 Pro S',      range: 420, consumption: 15.0 },
+    bmw_i4:         { name: 'BMW i4 eDrive40',    range: 590, consumption: 16.0 },
+    bmw_ix:         { name: 'BMW iX xDrive50',    range: 630, consumption: 19.0 },
+    hyundai_ioniq6: { name: 'Hyundai IONIQ 6 LR', range: 614, consumption: 14.0 },
+    hyundai_ioniq5: { name: 'Hyundai IONIQ 5 LR', range: 507, consumption: 16.0 },
+    renault_zoe:    { name: 'Renault Zoe R135',   range: 395, consumption: 17.0 },
+    nissan_leaf:    { name: 'Nissan Leaf 40 kWh', range: 270, consumption: 16.0 },
+    peugeot_e208:   { name: 'Peugeot e-208',      range: 362, consumption: 14.5 },
+  };
+
+  const VEHICLES = {
+    small_petrol:     { fuel: 'petrol',   rate: 6.0  },
+    medium_petrol:    { fuel: 'petrol',   rate: 8.0  },
+    suv_petrol:       { fuel: 'petrol',   rate: 11.0 },
+    small_diesel:     { fuel: 'diesel',   rate: 5.0  },
+    medium_diesel:    { fuel: 'diesel',   rate: 6.5  },
+    small_van_diesel: { fuel: 'diesel',   rate: 9.0  },
+    large_van_diesel: { fuel: 'diesel',   rate: 13.0 },
+    truck_diesel:     { fuel: 'diesel',   rate: 35.0 },
+    electric_car:     { fuel: 'electric', rate: 18.0 },
+    electric_van:     { fuel: 'electric', rate: 28.0 },
+  };
+  const CO2_FACTOR = { petrol: 2.31, diesel: 2.68, electric: 0.22 };
+
+  let map, directionsRenderer, lastResult;
+  let fuelPrices = null, detectedCountryCode = null, costEnabled = false;
+
+  function isRoundTrip() {
+    return document.getElementById('roundTripToggle').checked;
+  }
+
+  function activeKm() {
+    if (!lastResult) return 0;
+    return isRoundTrip() ? lastResult.distKm * 2 : lastResult.distKm;
+  }
+
+  function activeMins() {
+    if (!lastResult) return 0;
+    return isRoundTrip() ? lastResult.durationMins * 2 : lastResult.durationMins;
+  }
+
+  function formatMins(total) {
+    const h = Math.floor(total / 60), m = total % 60;
+    if (h === 0) return `${m} mins`;
+    return `${h} hr${h > 1 ? 's' : ''} ${m} mins`;
+  }
+
+  function onToggleRoundTrip() {
+    const rt = isRoundTrip();
+    document.getElementById('labelOneWay').classList.toggle('active', !rt);
+    document.getElementById('labelRoundTrip').classList.toggle('active', rt);
+    document.getElementById('statRoundTripItem').classList.toggle('inactive', !rt);
+    if (lastResult) { recalcFuel(); recalcEV(); }
+  }
+
+  async function loadFuelPrices() {
+    if (fuelPrices) return fuelPrices;
+    try {
+      const r = await fetch('../../fuel-prices.json');
+      fuelPrices = await r.json();
+    } catch (e) { console.warn('Could not load fuel-prices.json:', e); }
+    return fuelPrices;
+  }
+
+  function detectCountry(lat, lng) {
+    return new Promise(resolve => {
+      new google.maps.Geocoder().geocode({ location: { lat, lng } }, (results, status) => {
+        if (status !== 'OK' || !results.length) { resolve(null); return; }
+        for (const comp of results[0].address_components) {
+          if (comp.types.includes('country')) { resolve(comp.short_name); return; }
+        }
+        resolve(null);
+      });
+    });
+  }
+
+  async function applyCostCountry(lat, lng) {
+    const prices = await loadFuelPrices();
+    const code = await detectCountry(lat, lng);
+    detectedCountryCode = code;
+
+    const vehicleKey = document.getElementById('vehicleSelect').value;
+    const fuelType   = vehicleKey ? VEHICLES[vehicleKey].fuel : 'petrol';
+    const isElectric = fuelType === 'electric';
+    const entry      = prices && code && prices.countries[code];
+    const fuelKey    = isElectric ? 'electric_kwh' : fuelType;
+    const displayMult = (!isElectric && entry && entry.display_multiplier) || 1;
+    const rawPrice    = entry ? entry[fuelKey] : null;
+    const displayPrice = rawPrice !== null ? parseFloat((rawPrice * displayMult).toFixed(4)) : null;
+    const sym         = entry ? entry.symbol : '';
+    const displayUnit = isElectric ? 'kWh' : (entry && entry.display_unit ? entry.display_unit : 'L');
+
+    document.getElementById('priceLabel').textContent    = isElectric ? 'Electricity Price' : (fuelType === 'diesel' ? 'Diesel Price' : 'Petrol Price');
+    document.getElementById('priceCurrency').textContent = `${sym}/${displayUnit}`;
+    document.getElementById('priceHint').textContent     = code ? `Auto-detected: ${code}` : 'Country not detected — enter price manually';
+    if (displayPrice !== null) document.getElementById('fuelPriceInput').value = displayPrice;
+
+    validateFuelPrice();
+    recalcFuel();
+    recalcEV();
+  }
+
+  async function startCostEstimation() {
+    const btn = document.getElementById('estimateCostBtn');
+    btn.disabled = true; btn.textContent = '⛽ Detecting…';
+    const { fromLat, fromLng } = lastResult;
+    await applyCostCountry(fromLat, fromLng);
+    btn.textContent = '⛽ Estimate Fuel Cost'; btn.disabled = false;
+    document.getElementById('costSection').classList.add('visible');
+    costEnabled = true;
+    recalcFuel(); recalcEV();
+  }
+
+  function validateFuelPrice() {
+    if (!fuelPrices) return;
+    const price = parseFloat(document.getElementById('fuelPriceInput').value);
+    const warnEl = document.getElementById('priceWarn');
+    warnEl.textContent = ''; warnEl.className = 'price-warn';
+    if (isNaN(price) || price <= 0) return;
+    const entry = detectedCountryCode && fuelPrices.countries[detectedCountryCode];
+    const displayMult = (entry && entry.display_multiplier) || 1;
+    const ppl = price / displayMult;
+    if (ppl > 15) return;
+    const v = fuelPrices.validation;
+    if (ppl < v.floor_per_litre || ppl > v.ceiling_per_litre) {
+      warnEl.textContent = `Price outside expected range (${v.floor_per_litre}–${v.ceiling_per_litre} per unit).`;
+      warnEl.classList.add('danger');
+    } else if (ppl < v.warn_below_per_litre || ppl > v.warn_above_per_litre) {
+      warnEl.textContent = 'Unusual price — please verify.';
+    }
+  }
+
+  function onFuelPriceInput() { validateFuelPrice(); recalcFuel(); recalcEV(); }
+
+  function initMap() {
+    map = new google.maps.Map(document.getElementById('map'), {
+      center: { lat: 51.5, lng: 5.0 }, zoom: 5,
+      styles: [
+        { elementType: 'geometry',           stylers: [{ color: '#1c1f2b' }] },
+        { elementType: 'labels.text.fill',   stylers: [{ color: '#8a93a8' }] },
+        { elementType: 'labels.text.stroke', stylers: [{ color: '#1c1f2b' }] },
+        { featureType: 'road',               elementType: 'geometry', stylers: [{ color: '#2a2d3a' }] },
+        { featureType: 'road.highway',       elementType: 'geometry', stylers: [{ color: '#3a3f52' }] },
+        { featureType: 'water',              elementType: 'geometry', stylers: [{ color: '#0f1117' }] },
+        { featureType: 'administrative',     elementType: 'geometry.stroke', stylers: [{ color: '#2a2d3a' }] },
+        { featureType: 'poi',                stylers: [{ visibility: 'off' }] },
+        { featureType: 'transit',            stylers: [{ visibility: 'off' }] },
+      ],
+      disableDefaultUI: true,
+      zoomControl: true,
+      zoomControlOptions: { position: google.maps.ControlPosition.RIGHT_BOTTOM },
+    });
+    directionsRenderer = new google.maps.DirectionsRenderer({
+      suppressMarkers: true,
+      polylineOptions: { strokeColor: '#4f8ef7', strokeWeight: 3, strokeOpacity: 0.9 },
+    });
+    directionsRenderer.setMap(map);
+    ['fromInput', 'toInput'].forEach(id => {
+      new google.maps.places.Autocomplete(document.getElementById(id), { types: ['geocode'] });
+    });
+  }
+
+  async function calculate() {
+    const from = document.getElementById('fromInput').value.trim();
+    const to   = document.getElementById('toInput').value.trim();
+    const errorEl = document.getElementById('errorMsg');
+    const btn     = document.getElementById('calcBtn');
+    errorEl.style.display = 'none';
+
+    if (!from || !to) { showError('Please fill in both From and To addresses.'); return; }
+    if (!WEBHOOK_URL.startsWith('http')) { showError('Webhook URL not configured.'); return; }
+
+    btn.disabled = true; btn.classList.add('loading');
+
+    try {
+      const res = await fetch(WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stops: [from, to] }),
+      });
+      if (!res.ok) throw new Error(`Webhook returned ${res.status}`);
+      const data = await res.json();
+      displayResults(data, from, to);
+    } catch (err) {
+      showError('Could not calculate route. (' + err.message + ')');
+    } finally {
+      btn.disabled = false; btn.classList.remove('loading');
+    }
+  }
+
+  function displayResults(data, fromAddr, toAddr) {
+    const leg = data.legs[0];
+
+    lastResult = {
+      data, fromAddr, toAddr,
+      distKm:       leg.distance_km,
+      durationMins: leg.duration_mins,
+      duration:     leg.duration,
+      fromLat: leg.from_lat, fromLng: leg.from_lng,
+      toLat:   leg.to_lat,   toLng:   leg.to_lng,
+    };
+
+    const rt = isRoundTrip();
+    const rtKm   = leg.distance_km * 2;
+    const rtMins = leg.duration_mins * 2;
+
+    document.getElementById('statDistOneWay').textContent  = leg.distance_km + ' km';
+    document.getElementById('statDurOneWay').textContent   = leg.duration;
+    document.getElementById('statDistRoundTrip').textContent = rtKm + ' km';
+    document.getElementById('statDurRoundTrip').textContent  = formatMins(rtMins);
+    document.getElementById('statRoundTripItem').classList.toggle('inactive', !rt);
+
+    document.getElementById('statsBar').classList.remove('hidden');
+    document.getElementById('exportBar').classList.remove('hidden');
+    document.getElementById('estimateCostBtn').style.display = 'block';
+
+    recalcFuel();
+    recalcEV();
+    if (costEnabled) applyCostCountry(leg.from_lat, leg.from_lng);
+
+    // Draw route on map
+    new google.maps.DirectionsService().route({
+      origin:      { lat: leg.from_lat, lng: leg.from_lng },
+      destination: { lat: leg.to_lat,   lng: leg.to_lng   },
+      travelMode:  google.maps.TravelMode.DRIVING,
+    }, (result, status) => {
+      if (status === 'OK') directionsRenderer.setDirections(result);
+      placeMarkers(leg, fromAddr, toAddr);
+    });
+  }
+
+  function placeMarkers(leg, fromAddr, toAddr) {
+    [
+      { lat: leg.from_lat, lng: leg.from_lng, label: 'A', color: '#4f8ef7', title: fromAddr },
+      { lat: leg.to_lat,   lng: leg.to_lng,   label: 'B', color: '#34d399', title: toAddr   },
+    ].forEach(({ lat, lng, label, color, title }) => {
+      new google.maps.Marker({
+        position: { lat, lng }, map, title,
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 10, fillColor: color, fillOpacity: 1,
+          strokeColor: '#0f1117', strokeWeight: 2,
+        },
+        label: { text: label, color: '#0f1117', fontSize: '11px', fontWeight: '700' },
+      });
+    });
+  }
+
+  function recalcFuel() {
+    if (!lastResult) return;
+    const vehicleKey = document.getElementById('vehicleSelect').value;
+    if (!vehicleKey) { document.getElementById('fuelBar').classList.add('hidden'); return; }
+
+    const vehicle    = VEHICLES[vehicleKey];
+    const isElectric = vehicle.fuel === 'electric';
+    const unit       = isElectric ? 'kWh' : 'L';
+    const factor     = CO2_FACTOR[vehicle.fuel];
+    const km         = activeKm();
+    const rt         = isRoundTrip();
+
+    const fuelUsed = parseFloat((km * vehicle.rate / 100).toFixed(1));
+    const co2      = parseFloat((fuelUsed * factor).toFixed(1));
+
+    document.getElementById('fuelBarLabel').textContent = `Fuel — ${rt ? 'Round Trip' : 'One Way'}`;
+    document.getElementById('fuelUsed').textContent     = `${fuelUsed} ${unit}`;
+    document.getElementById('fuelCo2').textContent      = `${co2} kg CO₂`;
+    document.getElementById('fuelCo2Big').textContent   = `${co2} kg`;
+    document.getElementById('fuelCo2Sub').textContent   = 'kg CO₂';
+
+    const costBigEl = document.getElementById('fuelCostBig');
+    const costSubEl = document.getElementById('fuelCostSub');
+    if (costEnabled) {
+      const priceInput = parseFloat(document.getElementById('fuelPriceInput').value);
+      const entry      = fuelPrices && detectedCountryCode && fuelPrices.countries[detectedCountryCode];
+      const displayMult = (!isElectric && entry && entry.display_multiplier) || 1;
+      const sym         = entry ? entry.symbol : '';
+      if (!isNaN(priceInput) && priceInput > 0) {
+        const cost = fuelUsed * (priceInput / displayMult);
+        costBigEl.textContent = sym + cost.toFixed(2);
+        costSubEl.textContent = rt ? 'round trip' : 'one way';
+      } else {
+        costBigEl.textContent = '—'; costSubEl.textContent = 'enter fuel price';
+      }
+    } else {
+      costBigEl.textContent = '—'; costSubEl.textContent = 'add fuel price →';
+    }
+
+    document.getElementById('fuelBar').classList.remove('hidden');
+    lastResult.fuelData = { unit, fuelUsed, co2, vehicleKey, isElectric };
+    recalcEV();
+  }
+
+  function recalcEV() {
+    if (!lastResult) return;
+    const evKey = document.getElementById('evSelect').value;
+    const evBar = document.getElementById('evBar');
+    if (!evKey) { evBar.classList.add('hidden'); return; }
+
+    const ev          = EV_MODELS[evKey];
+    const usableRange = ev.range * 0.85;
+    const km          = activeKm();
+    const feasible    = km <= usableRange;
+    const rangeLeft   = Math.round(usableRange - km);
+
+    const feasibleEl = document.getElementById('evFeasible');
+    feasibleEl.textContent = feasible ? '✓ Yes' : '✗ No';
+    feasibleEl.style.color = feasible ? '#06b6d4' : 'var(--danger)';
+    document.getElementById('evFeasibleSub').textContent = feasible
+      ? `${rangeLeft} km to spare`
+      : `${Math.abs(rangeLeft)} km over usable range`;
+
+    const tripKwh = parseFloat((km * ev.consumption / 100).toFixed(1));
+    document.getElementById('evEnergy').textContent    = `${tripKwh} kWh`;
+    document.getElementById('evEnergySub').textContent = `${ev.range} km WLTP range`;
+
+    const entry     = fuelPrices && detectedCountryCode && fuelPrices.countries[detectedCountryCode];
+    const elecPrice = entry ? entry.electric_kwh : null;
+    const sym       = entry ? entry.symbol : '';
+
+    if (elecPrice !== null) {
+      const tripEvCost = tripKwh * elecPrice;
+      document.getElementById('evTripCost').textContent    = sym + tripEvCost.toFixed(2);
+      document.getElementById('evTripCostSub').textContent = `${sym}${elecPrice.toFixed(3)}/kWh`;
+
+      const savingsEl  = document.getElementById('evSavings');
+      const savingsSub = document.getElementById('evSavingsSub');
+      if (costEnabled && lastResult.fuelData) {
+        const priceInput  = parseFloat(document.getElementById('fuelPriceInput').value);
+        const displayMult = (!lastResult.fuelData.isElectric && entry && entry.display_multiplier) || 1;
+        if (!isNaN(priceInput) && priceInput > 0) {
+          const iceCost = lastResult.fuelData.fuelUsed * (priceInput / displayMult);
+          const savings = iceCost - tripEvCost;
+          savingsEl.textContent  = savings >= 0 ? sym + savings.toFixed(2) : `−${sym}${Math.abs(savings).toFixed(2)}`;
+          savingsEl.style.color  = savings >= 0 ? 'var(--accent2)' : 'var(--danger)';
+          savingsSub.textContent = savings >= 0 ? `vs ${lastResult.fuelData.vehicleKey.replace(/_/g,' ')}` : 'EV costs more';
+        } else {
+          savingsEl.textContent = '—'; savingsEl.style.color = ''; savingsSub.textContent = 'Add fuel price →';
+        }
+      } else {
+        savingsEl.textContent = '—'; savingsEl.style.color = '';
+        savingsSub.textContent = costEnabled ? '' : 'Add fuel price →';
+      }
+    } else {
+      document.getElementById('evTripCost').textContent    = '—';
+      document.getElementById('evTripCostSub').textContent = detectedCountryCode ? 'No electricity data' : 'Click ⛽ first';
+      document.getElementById('evSavings').textContent     = '—';
+      document.getElementById('evSavings').style.color     = '';
+      document.getElementById('evSavingsSub').textContent  = '';
+    }
+
+    evBar.classList.remove('hidden');
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('errorMsg');
+    el.textContent = msg; el.style.display = 'block';
+  }
+
+  function exportCSV() {
+    if (!lastResult) return;
+    const rt = isRoundTrip();
+    const km = activeKm();
+    const rows = [
+      ['Field', 'Value'],
+      ['From', lastResult.fromAddr],
+      ['To',   lastResult.toAddr],
+      ['Trip Type', rt ? 'Round Trip' : 'One Way'],
+      ['One Way Distance (km)', lastResult.distKm],
+      ['One Way Duration',      lastResult.duration],
+      ['Active Distance (km)',  km],
+      ['Active Duration',       formatMins(activeMins())],
+    ];
+    if (lastResult.fuelData) {
+      const { unit, fuelUsed, co2, vehicleKey } = lastResult.fuelData;
+      rows.push(
+        ['Vehicle', vehicleKey.replace(/_/g, ' ')],
+        [`Fuel Used (${unit})`, fuelUsed],
+        ['CO₂ (kg)', co2],
+      );
+      if (costEnabled) {
+        const priceInput = parseFloat(document.getElementById('fuelPriceInput').value);
+        const entry = fuelPrices && detectedCountryCode && fuelPrices.countries[detectedCountryCode];
+        const displayMult = (!lastResult.fuelData.isElectric && entry && entry.display_multiplier) || 1;
+        const sym = entry ? entry.symbol : '';
+        const curr = document.getElementById('priceCurrency').textContent;
+        if (!isNaN(priceInput) && priceInput > 0) {
+          rows.push(
+            [`Fuel Price (${curr})`, priceInput],
+            ['Fuel Cost', sym + (fuelUsed * (priceInput / displayMult)).toFixed(2)],
+          );
+        }
+      }
+    }
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'route-result.csv'; a.click();
+  }
+
+  document.addEventListener('keydown', e => { if (e.key === 'Enter') calculate(); });
+</script>
+
+<script
+  src="https://maps.googleapis.com/maps/api/js?key=__MAPS_API_KEY__&libraries=places&callback=initMap"
+  async defer>
+</script>
+
+</body>
+</html>
