@@ -656,7 +656,7 @@
 
   let map, directionsRenderer, directionsService, lastResult;
   let activeMarkers = [];
-  let photoInfoWindows = []; // { iw, p, query } — for zoom-adaptive resizing
+  let photoOverlays = [];
   let activePolyline = null;
   let fuelPrices = null, detectedCountryCode = null, costEnabled = false;
   let stopIdCounter = 0;
@@ -872,12 +872,6 @@
     maxBtn.addEventListener('click', toggleMapMaximize);
     map.controls[google.maps.ControlPosition.TOP_RIGHT].push(maxBtn);
 
-    // Update photo card sizes when zoom changes
-    map.addListener('zoom_changed', () => {
-      const size = photoCardSize(map.getZoom());
-      photoInfoWindows.forEach(({ iw, p, query }) => iw.setContent(photoCardContent(p, query, size)));
-    });
-
     // Add stops — prefill from ?stops=A|B|C URL param if present
     const preStops = new URLSearchParams(location.search).get('stops');
     if (preStops) {
@@ -1070,28 +1064,57 @@
 
   /* ── Stop photos (holiday planner mode) ── */
 
-  function photoCardSize(zoom) {
-    const w = Math.max(40, Math.min(120, zoom * 6 - 20));
-    return {
-      imgW: w,
-      imgH: Math.round(w * 0.65),
-      nameFz: Math.max(9, Math.round(w * 0.12)) + 'px',
-      attrFz: w >= 70 ? '8px' : '0px',
-    };
-  }
+  class PhotoOverlay extends google.maps.OverlayView {
+    constructor(position, photoUrl, label) {
+      super();
+      this.position = position;
+      this.photoUrl = photoUrl;
+      this.label = label;
+      this.div = null;
+    }
 
-  function photoCardContent(p, query, size) {
-    const { imgW, imgH, nameFz, attrFz } = size;
-    const stopLabel = query.split(',')[0];
-    return `<div style="width:${imgW}px;font-family:system-ui,sans-serif">` +
-      `<img src="${p.photo_url}" style="width:${imgW}px;height:${imgH}px;object-fit:cover;border-radius:5px;display:block" />` +
-      `<div style="font-size:${nameFz};font-weight:700;color:#1a1d27;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${stopLabel}</div>` +
-      (p.attribution ? `<div style="font-size:${attrFz};color:#94a3b8;margin-top:1px">📷 ${p.attribution}</div>` : '') +
-      `</div>`;
+    onAdd() {
+      const div = document.createElement('div');
+      div.style.cssText = [
+        'position:absolute',
+        'width:120px',
+        'background:#1c1f2b',
+        'border-radius:8px',
+        'overflow:hidden',
+        'box-shadow:0 3px 10px rgba(0,0,0,0.6)',
+        'transform:translate(-50%,calc(-100% - 16px))',
+        'pointer-events:auto',
+        'cursor:pointer',
+        'transition:opacity 0.15s',
+      ].join(';');
+      div.innerHTML =
+        `<img src="${this.photoUrl}" style="width:120px;height:78px;object-fit:cover;display:block">` +
+        `<div style="padding:4px 7px 5px;font-family:system-ui,sans-serif;font-size:10px;font-weight:700;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${this.label}</div>`;
+      div.addEventListener('click', () => {
+        this.getMap().panTo(this.position);
+      });
+      this.div = div;
+      this.getPanes().floatPane.appendChild(div);
+    }
+
+    draw() {
+      if (!this.div) return;
+      const proj = this.getProjection();
+      const pt = proj.fromLatLngToDivPixel(this.position);
+      this.div.style.left = pt.x + 'px';
+      this.div.style.top  = pt.y + 'px';
+      // Auto-show at zoom >= 10, hide when zoomed out
+      this.div.style.display = this.getMap().getZoom() >= 10 ? 'block' : 'none';
+    }
+
+    onRemove() {
+      if (this.div) { this.div.parentNode.removeChild(this.div); this.div = null; }
+    }
   }
 
   async function addStopPhotos(stopValues) {
-    photoInfoWindows = [];
+    photoOverlays.forEach(o => o.setMap(null));
+    photoOverlays = [];
     try {
       const resp = await fetch(PHOTO_WEBHOOK, {
         method: 'POST',
@@ -1099,23 +1122,17 @@
         body: JSON.stringify({ country: 'trip', queries: stopValues }),
       });
       const photos = await resp.json();
-      const size = photoCardSize(map.getZoom() || 7);
 
       activeMarkers.forEach((marker, i) => {
         const query = stopValues[i];
         const p = photos[query];
         if (!p || !p.photo_url) return;
-
-        const iw = new google.maps.InfoWindow({
-          content: photoCardContent(p, query, size),
-          pixelOffset: new google.maps.Size(0, -6),
-          disableAutoPan: true,
-        });
-        photoInfoWindows.push({ iw, p, query });
-        marker.addListener('click', () => {
-          map.panTo(marker.getPosition());
-          iw.open({ map, anchor: marker });
-        });
+        const label = query.split(',')[0];
+        const overlay = new PhotoOverlay(marker.getPosition(), p.photo_url, label);
+        overlay.setMap(map);
+        photoOverlays.push(overlay);
+        // Marker click still pans to stop
+        marker.addListener('click', () => map.panTo(marker.getPosition()));
       });
     } catch (e) {
       // Photos unavailable — silent fail, markers still work normally
