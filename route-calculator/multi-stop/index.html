@@ -200,6 +200,11 @@
     /* ── Map ── */
     #map { flex: 1; background: #1c1f2b; position: relative; }
 
+    @keyframes stopModalIn {
+      from { opacity: 0; transform: scale(0.94) translateY(8px); }
+      to   { opacity: 1; transform: scale(1)    translateY(0);   }
+    }
+
     #map.maximized {
       position: fixed !important;
       inset: 0 !important;
@@ -1064,14 +1069,52 @@
 
   /* ── Stop photos (holiday planner mode) ── */
 
+  function showStopModal(photoUrl, query, stopNum, totalStops, attribution) {
+    const parts = query.split(',');
+    const city    = parts[0].trim();
+    const country = parts.slice(1).join(',').trim();
+
+    const old = document.getElementById('stop-modal');
+    if (old) old.remove();
+
+    const backdrop = document.createElement('div');
+    backdrop.id = 'stop-modal';
+    backdrop.style.cssText = 'position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;padding:16px';
+
+    const card = document.createElement('div');
+    card.style.cssText = 'background:#1c1f2b;border-radius:16px;overflow:hidden;width:100%;max-width:360px;box-shadow:0 16px 48px rgba(0,0,0,0.85);animation:stopModalIn 0.18s ease';
+    card.innerHTML =
+      `<img src="${photoUrl}" style="width:100%;height:240px;object-fit:cover;display:block">` +
+      `<div style="padding:16px 18px 18px">` +
+        `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">` +
+          `<div>` +
+            `<div style="font-family:system-ui,sans-serif;font-size:20px;font-weight:700;color:#e2e8f0;line-height:1.2">${city}</div>` +
+            (country ? `<div style="font-family:system-ui,sans-serif;font-size:13px;color:#94a3b8;margin-top:3px">${country}</div>` : '') +
+          `</div>` +
+          `<span style="flex-shrink:0;background:rgba(79,142,247,0.15);color:#4f8ef7;font-family:system-ui,sans-serif;font-size:11px;font-weight:700;padding:4px 9px;border-radius:20px;margin-top:2px">Stop ${stopNum} of ${totalStops}</span>` +
+        `</div>` +
+        (attribution ? `<div style="font-family:system-ui,sans-serif;font-size:11px;color:#475569;margin-top:10px">📷 ${attribution}</div>` : '') +
+      `</div>`;
+
+    backdrop.appendChild(card);
+    backdrop.addEventListener('click', e => { if (e.target === backdrop) backdrop.remove(); });
+    document.addEventListener('keydown', function esc(e) {
+      if (e.key === 'Escape') { backdrop.remove(); document.removeEventListener('keydown', esc); }
+    });
+    document.body.appendChild(backdrop);
+  }
+
   async function addStopPhotos(stopValues) {
     // Defined here so google.maps.OverlayView is guaranteed to be available
     class PhotoOverlay extends google.maps.OverlayView {
-      constructor(position, photoUrl, label) {
+      constructor(position, photoUrl, query, stopNum, totalStops, attribution) {
         super();
-        this.position = position;
-        this.photoUrl = photoUrl;
-        this.label = label;
+        this.position  = position;
+        this.photoUrl  = photoUrl;
+        this.query     = query;
+        this.stopNum   = stopNum;
+        this.totalStops = totalStops;
+        this.attribution = attribution;
         this.div = null;
       }
 
@@ -1088,10 +1131,14 @@
           'pointer-events:auto',
           'cursor:pointer',
         ].join(';');
+        const label = this.query.split(',')[0].trim();
         div.innerHTML =
           `<img src="${this.photoUrl}" style="width:120px;height:78px;object-fit:cover;display:block">` +
-          `<div style="padding:4px 7px 5px;font-family:system-ui,sans-serif;font-size:10px;font-weight:700;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${this.label}</div>`;
-        div.addEventListener('click', () => this.getMap().panTo(this.position));
+          `<div style="padding:4px 7px 5px;font-family:system-ui,sans-serif;font-size:10px;font-weight:700;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${label}</div>`;
+        div.addEventListener('click', () => {
+          this.getMap().panTo(this.position);
+          showStopModal(this.photoUrl, this.query, this.stopNum, this.totalStops, this.attribution);
+        });
         this.div = div;
         this.getPanes().floatPane.appendChild(div);
       }
@@ -1108,6 +1155,7 @@
         if (this.div) { this.div.parentNode.removeChild(this.div); this.div = null; }
       }
     }
+
     photoOverlays.forEach(o => o.setMap(null));
     photoOverlays = [];
     try {
@@ -1117,16 +1165,15 @@
         body: JSON.stringify({ country: 'trip', queries: stopValues }),
       });
       const photos = await resp.json();
+      const total = stopValues.length;
 
       activeMarkers.forEach((marker, i) => {
         const query = stopValues[i];
         const p = photos[query];
         if (!p || !p.photo_url) return;
-        const label = query.split(',')[0];
-        const overlay = new PhotoOverlay(marker.getPosition(), p.photo_url, label);
+        const overlay = new PhotoOverlay(marker.getPosition(), p.photo_url, query, i + 1, total, p.attribution || null);
         overlay.setMap(map);
         photoOverlays.push(overlay);
-        // Marker click still pans to stop
         marker.addListener('click', () => map.panTo(marker.getPosition()));
       });
     } catch (e) {
