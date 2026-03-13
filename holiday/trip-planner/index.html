@@ -305,20 +305,69 @@
       margin-top: auto;
       padding-top: 4px;
     }
-    .plan-btn a {
+    .plan-btn a, .plan-btn button {
       display: block;
+      width: 100%;
       text-align: center;
       background: var(--purple);
       color: #fff;
       text-decoration: none;
+      border: none;
       border-radius: 7px;
       padding: 9px 16px;
       font-size: 12px;
       font-weight: 700;
       letter-spacing: 0.04em;
       transition: opacity 0.15s;
+      cursor: pointer;
     }
-    .plan-btn a:hover { opacity: 0.85; }
+    .plan-btn a:hover, .plan-btn button:hover { opacity: 0.85; }
+
+    /* ── Journey panel ── */
+    .journey-panel {
+      background: rgba(79,142,247,0.06);
+      border: 1px solid rgba(79,142,247,0.18);
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 24px;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: flex-end;
+    }
+    .journey-panel-label {
+      width: 100%;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      margin-bottom: 2px;
+    }
+    .journey-field {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      flex: 1;
+      min-width: 180px;
+    }
+    .journey-field label {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .journey-input {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 13px;
+      padding: 8px 12px;
+      outline: none;
+      width: 100%;
+      transition: border-color 0.15s;
+    }
+    .journey-input:focus { border-color: var(--accent); }
+    .journey-input::placeholder { color: var(--muted); font-style: italic; }
 
     /* Loading state */
     .photo-loading {
@@ -417,6 +466,18 @@
         <option value="">All regions</option>
       </select>
       <input type="text" id="search-input" placeholder="Search trips…" autocomplete="off" />
+    </div>
+
+    <div class="journey-panel">
+      <div class="journey-panel-label">📍 Personalise your journey — optional</div>
+      <div class="journey-field">
+        <label>Starting from</label>
+        <input type="text" id="start-input" class="journey-input" placeholder="e.g. Paris, London, Amsterdam…" autocomplete="off">
+      </div>
+      <div class="journey-field">
+        <label>Ending at</label>
+        <input type="text" id="end-input" class="journey-input" placeholder="Leave blank to end at last stop" autocomplete="off">
+      </div>
     </div>
 
     <div id="cards-grid"></div>
@@ -522,8 +583,7 @@
     countEl.textContent = `${trips.length} itinerar${trips.length === 1 ? 'y' : 'ies'}`;
 
     grid.innerHTML = trips.map(trip => {
-      const stopsParam = trip.stops.map(s => encodeURIComponent(s.name)).join('|');
-      const planUrl = `${MULTI_STOP_URL}?stops=${stopsParam}`;
+      const stopsJson = escHtml(JSON.stringify(trip.stops.map(s => s.name)));
 
       // Stops display (first 5, with separators)
       const stopsHtml = trip.stops.slice(0, 6).map((s, i, arr) =>
@@ -557,7 +617,7 @@
             <div class="trip-stops">${stopsHtml}</div>
             <div class="trip-highlights">${highlightsHtml}</div>
             <div class="plan-btn">
-              <a href="${planUrl}" target="_blank">Plan this route →</a>
+              <button data-stops="${stopsJson}" onclick="openPlanner(this)">Plan this route →</button>
             </div>
           </div>
           <div class="photo-attribution" id="${attrId}"></div>
@@ -643,6 +703,15 @@
 
     renderCards(filtered);
     if (photoCache[currentCountry]) applyPhotos(currentCountry);
+  }
+
+  // ── Open planner with optional start/end ──
+  function openPlanner(btn) {
+    const stops = JSON.parse(btn.dataset.stops);
+    const start = document.getElementById('start-input').value.trim();
+    const end   = document.getElementById('end-input').value.trim();
+    const all   = [...(start ? [start] : []), ...stops, ...(end ? [end] : [])];
+    window.open(`${MULTI_STOP_URL}?stops=${all.map(encodeURIComponent).join('|')}`, '_blank');
   }
 
   // ── Utilities ──
