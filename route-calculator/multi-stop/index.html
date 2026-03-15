@@ -94,6 +94,16 @@
     }
     .remove-btn:hover { border-color: var(--danger); color: var(--danger); }
 
+    .drag-handle {
+      width: 14px; height: 22px; display: flex; align-items: center; justify-content: center;
+      color: var(--muted); font-size: 13px; cursor: grab; flex-shrink: 0;
+      opacity: 0.4; transition: opacity 0.15s; user-select: none;
+    }
+    .drag-handle:hover { opacity: 1; }
+    .stop-row.dragging { opacity: 0.35; }
+    .stop-row.drag-over-top { border-top: 2px solid var(--accent); margin-top: -2px; }
+    .stop-row.drag-over-bottom { border-bottom: 2px solid var(--accent); margin-bottom: -2px; }
+
     #addStopBtn {
       background: transparent; color: var(--accent2);
       border: 1px dashed var(--accent2); border-radius: 6px;
@@ -705,12 +715,20 @@
     else if (isDestination) placeholder = 'Destination';
     else                    placeholder = 'e.g. ' + (midPlaceholders[rows.length - 2] || 'Next stop');
 
+    row.draggable = true;
     row.innerHTML = `
+      <div class="drag-handle" title="Drag to reorder">⠿</div>
       <div class="stop-label" style="background:${STOP_COLORS[displayIdx]}">${STOP_LABELS[displayIdx]}</div>
-      <input type="text" id="${id}" class="stop-input" value="${defaultValue}"
+      <input type="text" id="${id}" class="stop-input" value="${defaultValue}" draggable="false"
         placeholder="${placeholder}" autocomplete="off" />
       <button class="remove-btn" onclick="removeStop(this)" title="Remove stop">✕</button>
     `;
+
+    row.addEventListener('dragstart', onDragStart);
+    row.addEventListener('dragover',  onDragOver);
+    row.addEventListener('dragleave', onDragLeave);
+    row.addEventListener('drop',      onDrop);
+    row.addEventListener('dragend',   onDragEnd);
 
     if (insertBeforeLast) {
       container.insertBefore(row, rows[rows.length - 1]);
@@ -732,8 +750,6 @@
     const rows = container.querySelectorAll('.stop-row');
     if (rows.length <= 2) return;
     const row = btn.closest('.stop-row');
-    const rowIndex = Array.from(rows).indexOf(row);
-    if (rowIndex === 0 || rowIndex === rows.length - 1) return; // never remove start/destination
     delete stopAutocompletes[row.dataset.id];
     row.remove();
     updateStopLabels();
@@ -762,10 +778,63 @@
       addBtn.textContent = '+ Add Stop';
       premNote.style.display = 'none';
     }
-    rows.forEach((row, i) => {
-      const isEndpoint = i === 0 || i === count - 1;
-      row.querySelector('.remove-btn').style.visibility = (count <= 2 || isEndpoint) ? 'hidden' : 'visible';
+    rows.forEach((row) => {
+      row.querySelector('.remove-btn').style.visibility = count <= 2 ? 'hidden' : 'visible';
     });
+  }
+
+  /* ── Drag-to-reorder ── */
+  let dragSrcRow = null;
+
+  function onDragStart(e) {
+    dragSrcRow = this;
+    this.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  }
+
+  function onDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (this === dragSrcRow) return;
+    document.querySelectorAll('#stopsContainer .stop-row').forEach(r => {
+      r.classList.remove('drag-over-top', 'drag-over-bottom');
+    });
+    const mid = this.getBoundingClientRect().top + this.getBoundingClientRect().height / 2;
+    this.classList.add(e.clientY < mid ? 'drag-over-top' : 'drag-over-bottom');
+  }
+
+  function onDragLeave() {
+    this.classList.remove('drag-over-top', 'drag-over-bottom');
+  }
+
+  function onDrop(e) {
+    e.preventDefault();
+    if (!dragSrcRow || dragSrcRow === this) return;
+    const container = document.getElementById('stopsContainer');
+    const mid = this.getBoundingClientRect().top + this.getBoundingClientRect().height / 2;
+    if (e.clientY < mid) {
+      container.insertBefore(dragSrcRow, this);
+    } else {
+      container.insertBefore(dragSrcRow, this.nextSibling);
+    }
+    this.classList.remove('drag-over-top', 'drag-over-bottom');
+    updateStopLabels();
+    updateStopUI();
+    if (lastResult && !IS_OPTIMISER && getStopValues().length >= 3) {
+      const btn = document.getElementById('optimiseBtn');
+      btn.style.display = 'block';
+      btn.disabled = false;
+      btn.classList.remove('done');
+      btn.textContent = '🔀 Optimise Route Order';
+    }
+  }
+
+  function onDragEnd() {
+    this.classList.remove('dragging');
+    document.querySelectorAll('#stopsContainer .stop-row').forEach(r => {
+      r.classList.remove('drag-over-top', 'drag-over-bottom');
+    });
+    dragSrcRow = null;
   }
 
   function getStopValues() {
