@@ -649,6 +649,7 @@
     if (!stadiumAddr) { showError('Please select a team or type a stadium address.'); return; }
     if (!WEBHOOK_URL.startsWith('http')) { showError('Webhook URL not configured.'); return; }
 
+    if (!checkUsage()) return;
     // Use matched team for metadata if available, otherwise create a generic one
     const team = teams.find(t => t.name === teamName) || { name: stadiumAddr, league: '—', stadium: stadiumAddr, address: stadiumAddr };
 
@@ -852,6 +853,51 @@
   }
 
   document.addEventListener('keydown', e => { if (e.key === 'Enter') calculate(); });
+</script>
+
+<style>
+#paywall-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:9999; align-items:center; justify-content:center; }
+#paywall-modal.visible { display:flex; }
+#paywall-box { background:#1a1d27; border:1px solid #2a2d3a; border-radius:12px; padding:32px 28px; max-width:420px; width:90%; text-align:center; }
+.pw-eyebrow { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.12em; color:#a78bfa; margin-bottom:12px; }
+.pw-heading { font-size:22px; font-weight:700; color:#e2e8f0; margin-bottom:12px; line-height:1.3; }
+.pw-body { font-size:14px; color:#94a3b8; line-height:1.6; margin-bottom:16px; }
+.pw-premium { font-size:13px; color:#64748b; line-height:1.5; margin-bottom:24px; }
+.pw-btn { background:#4f8ef7; color:#fff; border:none; border-radius:8px; padding:10px 28px; font-size:15px; font-weight:600; cursor:pointer; }
+.pw-btn:hover { background:#3a7de0; }
+</style>
+<div id="paywall-modal">
+  <div id="paywall-box">
+    <p class="pw-eyebrow">Daily limit reached</p>
+    <h2 class="pw-heading">You've used your 5 free uses today</h2>
+    <p class="pw-body">Come back tomorrow — your limit resets at midnight.</p>
+    <p class="pw-premium">✨ <strong>Path2Anywhere Premium</strong> is coming soon — unlimited routes, saved trips, and more.</p>
+    <button class="pw-btn" onclick="closePaywall()">Got it</button>
+  </div>
+</div>
+<script>
+const USAGE_KEY = 'p2a_daily_usage';
+const DAILY_LIMIT = 5;
+function isAdmin() { return localStorage.getItem('p2a_admin') === '1'; }
+function getUsageToday() {
+  try {
+    const d = JSON.parse(localStorage.getItem(USAGE_KEY) || '{}');
+    return d.date === new Date().toDateString() ? (d.count || 0) : 0;
+  } catch { return 0; }
+}
+function incrementUsage() {
+  localStorage.setItem(USAGE_KEY, JSON.stringify({
+    date: new Date().toDateString(), count: getUsageToday() + 1
+  }));
+}
+function checkUsage() {
+  if (isAdmin()) return true;
+  if (getUsageToday() >= DAILY_LIMIT) { showPaywall(); return false; }
+  incrementUsage();
+  return true;
+}
+function showPaywall() { document.getElementById('paywall-modal').classList.add('visible'); }
+function closePaywall() { document.getElementById('paywall-modal').classList.remove('visible'); }
 </script>
 
 <script
