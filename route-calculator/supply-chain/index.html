@@ -431,26 +431,6 @@
       color: #fff;
     }
 
-    /* ── Autocomplete dropdown dark override ── */
-    .pac-container {
-      background: var(--surface) !important;
-      border: 1px solid var(--border) !important;
-      border-radius: 6px !important;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.4) !important;
-      font-family: inherit !important;
-    }
-    .pac-item {
-      background: var(--surface) !important;
-      color: var(--text) !important;
-      border-top: 1px solid var(--border) !important;
-      font-size: 13px !important;
-      padding: 6px 10px !important;
-    }
-    .pac-item:hover, .pac-item-selected {
-      background: var(--border) !important;
-    }
-    .pac-item-query { color: var(--text) !important; }
-    .pac-matched { font-weight: 700; color: var(--accent) !important; }
 
     @media (max-width: 768px) {
       body {
@@ -829,11 +809,7 @@
     directionsRenderer.setMap(map);
 
     ['supplierInput', 'manufacturerInput', 'customerInput'].forEach(id => {
-      const ac = new google.maps.places.Autocomplete(document.getElementById(id), {
-        types: ['geocode'],
-        componentRestrictions: {},
-      });
-      ac.addListener('place_changed', () => { ac.getPlace(); });
+      initPhotonAutocomplete(document.getElementById(id));
     });
   }
 
@@ -1154,8 +1130,9 @@ function showPaywall() { document.getElementById('paywall-modal').classList.add(
 function closePaywall() { document.getElementById('paywall-modal').classList.remove('visible'); }
 </script>
 
+<script src="../photon-autocomplete.js"></script>
 <script
-  src="https://maps.googleapis.com/maps/api/js?key=__MAPS_API_KEY__&libraries=places&callback=initMap"
+  src="https://maps.googleapis.com/maps/api/js?key=__MAPS_API_KEY__&callback=initMap"
   async defer>
 </script>
 

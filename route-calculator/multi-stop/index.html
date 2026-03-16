@@ -402,20 +402,6 @@
     }
     button#exportBtn:hover { background: var(--accent); color: #fff; }
 
-    /* ── Autocomplete ── */
-    .pac-container {
-      background: var(--surface) !important; border: 1px solid var(--border) !important;
-      border-radius: 6px !important; box-shadow: 0 8px 24px rgba(0,0,0,0.4) !important;
-      font-family: inherit !important;
-    }
-    .pac-item {
-      background: var(--surface) !important; color: var(--text) !important;
-      border-top: 1px solid var(--border) !important;
-      font-size: 13px !important; padding: 6px 10px !important;
-    }
-    .pac-item:hover, .pac-item-selected { background: var(--border) !important; }
-    .pac-item-query { color: var(--text) !important; }
-    .pac-matched { font-weight: 700; color: var(--accent) !important; }
 
     /* ── Mobile ── */
     @media (max-width: 768px) {
@@ -688,7 +674,6 @@
   let activePolyline = null;
   let fuelPrices = null, detectedCountryCode = null, costEnabled = false;
   let stopIdCounter = 0;
-  const stopAutocompletes = {};
 
   /* ── Stop management ── */
 
@@ -738,11 +723,8 @@
 
     updateStopLabels();
 
-    if (window.google) {
-      const input = document.getElementById(id);
-      const ac = new google.maps.places.Autocomplete(input, { types: ['geocode'] });
-      ac.addListener('place_changed', () => { ac.getPlace(); });
-      stopAutocompletes[id] = ac;
+    if (window.initPhotonAutocomplete) {
+      initPhotonAutocomplete(document.getElementById(id));
     }
     updateStopUI();
   }
@@ -752,7 +734,6 @@
     const rows = container.querySelectorAll('.stop-row');
     if (rows.length <= 2) return;
     const row = btn.closest('.stop-row');
-    delete stopAutocompletes[row.dataset.id];
     row.remove();
     updateStopLabels();
     updateStopUI();
@@ -1668,8 +1649,9 @@ function showPaywall() { document.getElementById('paywall-modal').classList.add(
 function closePaywall() { document.getElementById('paywall-modal').classList.remove('visible'); }
 </script>
 
+<script src="../photon-autocomplete.js"></script>
 <script
-  src="https://maps.googleapis.com/maps/api/js?key=__MAPS_API_KEY__&libraries=places&callback=initMap"
+  src="https://maps.googleapis.com/maps/api/js?key=__MAPS_API_KEY__&callback=initMap"
   async defer>
 </script>
 
