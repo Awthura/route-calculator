@@ -659,12 +659,18 @@
     renderCards(currentData.trips);
     prefillJourneyBar();
 
-    // Fetch only photos not already in persistent cache
-    const missingPhotos = currentData.trips.some(t => !isPhotoCached(t.cover_search_query));
-    if (missingPhotos) {
-      fetchPhotos(country, currentData.trips);
-    } else {
+    // If all trips have pre-baked photo_url in the JSON, use them directly (no API call needed)
+    const allPreCached = currentData.trips.every(t => t.photo_url);
+    if (allPreCached) {
       applyPhotos();
+    } else {
+      // Fall back to webhook for any trips missing a static photo_url
+      const missingPhotos = currentData.trips.some(t => !t.photo_url && !isPhotoCached(t.cover_search_query));
+      if (missingPhotos) {
+        fetchPhotos(country, currentData.trips);
+      } else {
+        applyPhotos();
+      }
     }
   }
 
@@ -783,22 +789,26 @@
   function applyPhotos() {
     if (!currentData) return;
     currentData.trips.forEach(trip => {
-      const photoData = photoStore[trip.cover_search_query];
       const photoEl = document.getElementById(`photo-${trip.id}`);
       const attrEl  = document.getElementById(`attr-${trip.id}`);
       if (!photoEl || photoEl.tagName === 'IMG') return; // already replaced
 
-      if (photoData && photoData.photo_url) {
+      // Prefer static photo_url baked into JSON, fall back to webhook localStorage cache
+      const staticUrl = trip.photo_url || null;
+      const cachedData = photoStore[trip.cover_search_query];
+      const url = staticUrl || (cachedData && cachedData.photo_url) || null;
+
+      if (url) {
         const img = document.createElement('img');
         img.className = 'trip-cover';
         img.alt = trip.name;
-        img.src = photoData.photo_url;
+        img.src = url;
         img.onload = () => photoEl.replaceWith(img);
         img.onerror = () => photoEl.classList.remove('photo-loading');
       } else {
         photoEl.classList.remove('photo-loading');
       }
-      if (attrEl && photoData && photoData.attribution) attrEl.textContent = photoData.attribution;
+      if (attrEl && cachedData && cachedData.attribution) attrEl.textContent = cachedData.attribution;
     });
   }
 
