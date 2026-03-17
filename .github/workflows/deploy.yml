@@ -34,7 +34,11 @@ jobs:
             -exec sed -i "s|__WEBHOOK_URL__|${{ secrets.WEBHOOK_URL }}|g" {} + && \
           find . -name "*.html" \
             -not -path "./.git/*" \
-            -exec sed -i "s|__WEBHOOK_URL_MULTI__|${{ secrets.WEBHOOK_URL_MULTI }}|g" {} +
+            -exec sed -i "s|__WEBHOOK_URL_MULTI__|${{ secrets.WEBHOOK_URL_MULTI }}|g" {} + && \
+          find . -name "auth.js" \
+            -exec sed -i "s|__SUPABASE_URL__|${{ secrets.SUPABASE_URL }}|g" {} + && \
+          find . -name "auth.js" \
+            -exec sed -i "s|__SUPABASE_ANON_KEY__|${{ secrets.SUPABASE_ANON_KEY }}|g" {} +
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
