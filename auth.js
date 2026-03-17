@@ -9,26 +9,63 @@
 
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  let _session = null;
-  let _plan    = 'free';
+  let _session     = null;
+  let _plan        = 'free';
+  let _initialized = false;
 
   // ── Init ────────────────────────────────────────────────────────────────────
   async function init() {
+    // Handle OAuth callback errors — clean the URL and surface a friendly message
+    const urlParams = new URLSearchParams(window.location.search);
+    const oauthError = urlParams.get('error_code');
+    if (oauthError) {
+      // Strip the error query params and hash fragment from the URL
+      window.history.replaceState({}, '', window.location.pathname);
+      // Show a toast after the modal is injected (deferred below)
+      setTimeout(() => _showToast('Sign-in failed. Please try again.'), 100);
+    }
+
     const { data: { session } } = await sb.auth.getSession();
     _session = session;
     if (session) await _loadPlan();
 
-    sb.auth.onAuthStateChange(async (_event, session) => {
+    sb.auth.onAuthStateChange(async (event, session) => {
+      const wasSignedIn = !!_session;
       _session = session;
       _plan    = 'free';
       if (session) await _loadPlan();
       _updateHeaderUI();
+
+      // Clean up OAuth hash tokens from the URL
+      if (event === 'SIGNED_IN' && window.location.hash.includes('access_token')) {
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+
+      // Show welcome toast on new sign-ins (not on page-load session restore)
+      if (_initialized && event === 'SIGNED_IN' && !wasSignedIn && session) {
+        const name = session.user.user_metadata?.full_name || session.user.email || '';
+        _showToast(`Signed in as ${name}`, 'success');
+        closeAuthModal();
+      }
+      _initialized = true;
     });
 
     _injectAuthModal();
     _injectPaywallModal();
     _injectHeaderSlot();
     _updateHeaderUI();
+  }
+
+  function _showToast(message, type = 'error') {
+    const existing = document.getElementById('p2a-toast');
+    if (existing) existing.remove();
+    const toast = document.createElement('div');
+    toast.id = 'p2a-toast';
+    toast.textContent = message;
+    const isSuccess = type === 'success';
+    toast.style.cssText = `position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:${isSuccess ? '#0f2e1c' : '#3b1c1c'};border:1px solid ${isSuccess ? '#166534' : '#7f1d1d'};color:${isSuccess ? '#86efac' : '#fca5a5'};padding:10px 20px;border-radius:8px;font-size:14px;z-index:99999;box-shadow:0 4px 12px rgba(0,0,0,.4);white-space:nowrap`;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 4000);
   }
 
   async function _loadPlan() {
