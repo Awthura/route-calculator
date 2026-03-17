@@ -108,7 +108,7 @@
   async function _signInWithGoogle() {
     await sb.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: window.location.href },
+      options: { redirectTo: 'https://path2anywhere.com' },
     });
   }
 
