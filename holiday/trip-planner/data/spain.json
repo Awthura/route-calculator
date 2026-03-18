@@ -1684,7 +1684,8 @@
         "Lorca Baroque heritage",
         "Cartagena Punic walls"
       ],
-      "cover_search_query": "Cartagena Roman theatre ancient port Murcia Spain"
+      "cover_search_query": "Cartagena Roman theatre ancient port Murcia Spain",
+      "photo_url": "https://ivvujjmtshqlsnyxtibf.supabase.co/storage/v1/object/public/trip-photos/es/murcia-cartagena.jpg"
     },
     {
       "id": "madrid-royal-castile",
@@ -1835,7 +1836,8 @@
         "Mérida Roman bridge and aqueduct",
         "Extremadura dehesa cork oak"
       ],
-      "cover_search_query": "Mérida Roman theatre amphitheatre Spain"
+      "cover_search_query": "Mérida Roman theatre amphitheatre Spain",
+      "photo_url": "https://ivvujjmtshqlsnyxtibf.supabase.co/storage/v1/object/public/trip-photos/es/extremadura-merida-roman.jpg"
     },
     {
       "id": "extremadura-monfrague-plasencia",
@@ -2302,7 +2304,8 @@
         "Asturian cider and pre-Romanesque churches",
         "Santiago Cathedral finale"
       ],
-      "cover_search_query": "Cantabrian coast green Spain Atlantic cliffs fishing village"
+      "cover_search_query": "Cantabrian coast green Spain Atlantic cliffs fishing village",
+      "photo_url": "https://ivvujjmtshqlsnyxtibf.supabase.co/storage/v1/object/public/trip-photos/es/green-spain-cantabrian-coast.jpg"
     }
   ]
 }

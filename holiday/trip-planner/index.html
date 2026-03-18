@@ -434,14 +434,6 @@
     #empty-state.visible { display: block; }
     #empty-state p { font-size: 14px; margin-top: 8px; }
 
-    /* Attribution */
-    .photo-attribution {
-      font-size: 9px;
-      color: var(--muted);
-      text-align: right;
-      padding: 2px 6px 0;
-      opacity: 0.6;
-    }
 
     /* ── Responsive ── */
     @media (max-width: 600px) {
@@ -576,28 +568,11 @@
 
 <script>
   // ── Config ──
-  const WEBHOOK_URL = 'https://n8n.path2anywhere.com/webhook/trip-planner';
   const MULTI_STOP_URL = '/route-calculator/multi-stop/';
 
   // ── State ──
   let currentCountry = null;
   let currentData = null;
-  let photosLoading = false;
-
-  // ── Persistent photo cache (localStorage, 7-day TTL) ──
-  const PHOTO_CACHE_KEY = 'p2a_photos_v1';
-  const PHOTO_TTL = 7 * 24 * 60 * 60 * 1000;
-  let photoStore = {};
-  try { photoStore = JSON.parse(localStorage.getItem(PHOTO_CACHE_KEY) || '{}'); } catch {}
-
-  function isPhotoCached(query) {
-    const e = photoStore[query];
-    return e && e.photo_url && (Date.now() - (e.cachedAt || 0)) < PHOTO_TTL;
-  }
-
-  function savePhotoStore() {
-    try { localStorage.setItem(PHOTO_CACHE_KEY, JSON.stringify(photoStore)); } catch {}
-  }
 
   // ── Country picker ──
   document.querySelectorAll('.country-tile').forEach(tile => {
@@ -659,19 +634,7 @@
     renderCards(currentData.trips);
     prefillJourneyBar();
 
-    // If all trips have pre-baked photo_url in the JSON, use them directly (no API call needed)
-    const allPreCached = currentData.trips.every(t => t.photo_url);
-    if (allPreCached) {
-      applyPhotos();
-    } else {
-      // Fall back to webhook for any trips missing a static photo_url
-      const missingPhotos = currentData.trips.some(t => !t.photo_url && !isPhotoCached(t.cover_search_query));
-      if (missingPhotos) {
-        fetchPhotos(country, currentData.trips);
-      } else {
-        applyPhotos();
-      }
-    }
+    applyPhotos();
   }
 
   // ── Render ──
@@ -706,9 +669,7 @@
         `<span class="highlight-chip">${h}</span>`
       ).join('');
 
-      // Photo placeholder (will be replaced when photos load)
       const photoId = `photo-${trip.id}`;
-      const attrId = `attr-${trip.id}`;
 
       return `
         <div class="trip-card" data-trip-id="${trip.id}">
@@ -731,7 +692,6 @@
               <button data-trip="${tripJson}" onclick="openPlanner(this)">Plan this route →</button>
             </div>
           </div>
-          <div class="photo-attribution" id="${attrId}"></div>
         </div>
       `;
     }
@@ -754,64 +714,21 @@
     }
   }
 
-  // ── Photo fetching ──
-  async function fetchPhotos(country, trips) {
-    if (photosLoading) return;
-    photosLoading = true;
-
-    // Apply whatever is already cached immediately
-    applyPhotos();
-
-    // Only request photos not already baked into JSON or in localStorage cache
-    const queries = trips
-      .filter(t => !t.photo_url)
-      .map(t => t.cover_search_query)
-      .filter(q => !isPhotoCached(q));
-
-    if (queries.length === 0) { photosLoading = false; return; }
-
-    try {
-      const resp = await fetch(WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ country, queries }),
-      });
-      if (!resp.ok) throw new Error('Photo fetch failed');
-      const data = await resp.json();
-      const now = Date.now();
-      Object.entries(data).forEach(([q, v]) => { photoStore[q] = { ...v, cachedAt: now }; });
-      savePhotoStore();
-      applyPhotos();
-    } catch (e) {
-      document.querySelectorAll('.photo-loading').forEach(el => el.classList.remove('photo-loading'));
-    } finally {
-      photosLoading = false;
-    }
-  }
-
   function applyPhotos() {
     if (!currentData) return;
     currentData.trips.forEach(trip => {
       const photoEl = document.getElementById(`photo-${trip.id}`);
-      const attrEl  = document.getElementById(`attr-${trip.id}`);
       if (!photoEl || photoEl.tagName === 'IMG') return; // already replaced
-
-      // Prefer static photo_url baked into JSON, fall back to webhook localStorage cache
-      const staticUrl = trip.photo_url || null;
-      const cachedData = photoStore[trip.cover_search_query];
-      const url = staticUrl || (cachedData && cachedData.photo_url) || null;
-
-      if (url) {
+      if (trip.photo_url) {
         const img = document.createElement('img');
         img.className = 'trip-cover';
         img.alt = trip.name;
-        img.src = url;
+        img.src = trip.photo_url;
         img.onload = () => photoEl.replaceWith(img);
         img.onerror = () => photoEl.classList.remove('photo-loading');
       } else {
         photoEl.classList.remove('photo-loading');
       }
-      if (attrEl && cachedData && cachedData.attribution) attrEl.textContent = cachedData.attribution;
     });
   }
 
