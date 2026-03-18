@@ -1017,7 +1017,7 @@
       const values = preStops.split('|').map(s => decodeURIComponent(s).trim()).filter(Boolean);
       if (values.length >= 2) {
         values.forEach(v => addStop(v));
-        calculate().then(() => {
+        calculate(true).then(() => {
           if (FROM_TRIP_PLANNER && lastResult) addStopPhotos(lastResult.stopValues);
         });
       } else {
@@ -1039,7 +1039,7 @@
 
   /* ── Calculate ── */
 
-  async function calculate() {
+  async function calculate(skipAuth = false) {
     const stops   = getStopValues();
     const errorEl = document.getElementById('errorMsg');
     const btn     = document.getElementById('calcBtn');
@@ -1048,7 +1048,7 @@
     if (stops.length < 2) { showError('Please fill in at least 2 stops.'); return; }
     if (!WEBHOOK_URL.startsWith('http')) { showError('Webhook URL not configured.'); return; }
 
-    if (!(await P2AAuth.checkAndIncrementUsage())) return;
+    if (!skipAuth && !(await P2AAuth.checkAndIncrementUsage())) return;
     btn.disabled = true; btn.classList.add('loading');
 
     try {
